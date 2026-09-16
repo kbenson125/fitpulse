@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Html5QrcodeScanner } from 'html5-qrcode';
-import { X, Camera, Scale, Tag } from 'lucide-react';
+import { X, Camera, Scale, Tag, Loader2 } from 'lucide-react';
 
 export default function BarcodeScannerModal({ isOpen, onClose, onScanSuccess }) {
   const scannerRef = useRef(null);
@@ -8,6 +8,8 @@ export default function BarcodeScannerModal({ isOpen, onClose, onScanSuccess }) 
   const [customName, setCustomName] = useState('');
   const [servings, setServings] = useState(1);
   const [servingUnit, setServingUnit] = useState('serving');
+  const [isLoading, setIsLoading] = useState(false);
+  const [fetchedMacros, setFetchedMacros] = useState(null);
 
   useEffect(() => {
     if (!isOpen || scannedBarcode) return;
@@ -26,12 +28,50 @@ export default function BarcodeScannerModal({ isOpen, onClose, onScanSuccess }) 
       scannerRef.current = scanner;
 
       scanner.render(
-        (decodedText) => {
+        async (decodedText) => {
           scanner.clear().catch((err) => console.error('Failed to clear scanner:', err));
           scannerRef.current = null;
           setScannedBarcode(decodedText);
-          // Set a default name fallback using the barcode value
-          setCustomName(`Item (${decodedText})`);
+          setIsLoading(true);
+
+          try {
+            // Fetch product data from Open Food Facts API
+            const res = await fetch(`https://world.openfoodfacts.org/api/v2/product/${decodedText}.json`);
+            const data = await res.json();
+
+            if (data.status === 1 && data.product) {
+              const prod = data.product;
+              const nutriments = prod.nutriments || {};
+
+              const name = prod.product_name || prod.product_name_en || `Item (${decodedText})`;
+              setCustomName(name);
+
+              // Calculate base macros per 100g or direct serving values
+              const servingGrams = parseFloat(prod.serving_quantity) || 100;
+              const scaleToServing = servingGrams / 100;
+              
+              const calsPerServing = nutriments['energy-kcal_serving'] ?? Math.round((nutriments['energy-kcal_100g'] || 0) * scaleToServing);
+              const proteinPerServing = nutriments['proteins_serving'] ?? Math.round((nutriments.proteins_100g || 0) * scaleToServing);
+              const carbsPerServing = nutriments['carbohydrates_serving'] ?? Math.round((nutriments.carbohydrates_100g || 0) * scaleToServing);
+              const fatPerServing = nutriments['fat_serving'] ?? Math.round((nutriments.fat_100g || 0) * scaleToServing);
+              
+              setFetchedMacros({
+                calories: calsPerServing,
+                protein: proteinPerServing,
+                carbs: carbsPerServing,
+                fat: fatPerServing,
+              });
+            } else {
+              setCustomName(`Item (${decodedText})`);
+              setFetchedMacros(null);
+            }
+          } catch (err) {
+            console.error('Error fetching Open Food Facts data:', err);
+            setCustomName(`Item (${decodedText})`);
+            setFetchedMacros(null);
+          } finally {
+            setIsLoading(false);
+          }
         },
         () => {}
       );
@@ -53,8 +93,9 @@ export default function BarcodeScannerModal({ isOpen, onClose, onScanSuccess }) 
     onScanSuccess({
       barcode: scannedBarcode,
       name: customName || `Item (${scannedBarcode})`,
-      servings: Number(servings) || 1,
-      unit: servingUnit
+      servings: parseFloat(servings) || 1,
+      unit: servingUnit,
+      macros: fetchedMacros
     });
 
     handleClose();
@@ -65,6 +106,8 @@ export default function BarcodeScannerModal({ isOpen, onClose, onScanSuccess }) 
     setCustomName('');
     setServings(1);
     setServingUnit('serving');
+    setFetchedMacros(null);
+    setIsLoading(false);
     onClose();
   };
 
@@ -88,6 +131,11 @@ export default function BarcodeScannerModal({ isOpen, onClose, onScanSuccess }) 
             <p className="text-xs text-slate-400">Position the product barcode within the camera frame below.</p>
             <div id="html5-qrcode-reader" className="overflow-hidden rounded-xl border border-slate-700 bg-slate-950 text-white"></div>
           </div>
+        ) : isLoading ? (
+          <div className="flex flex-col items-center justify-center py-8 space-y-3 text-slate-400">
+            <Loader2 className="w-8 h-8 text-emerald-400 animate-spin" />
+            <p className="text-xs font-semibold">Fetching product nutritional data...</p>
+          </div>
         ) : (
           <form onSubmit={handleConfirmQuantity} className="space-y-4">
             <div className="bg-slate-800 p-3 rounded-xl border border-slate-700 space-y-2">
@@ -110,6 +158,15 @@ export default function BarcodeScannerModal({ isOpen, onClose, onScanSuccess }) 
                   className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500"
                 />
               </div>
+
+              {fetchedMacros && (
+                <div className="pt-2 border-t border-slate-700/60 flex justify-around text-[10px] text-slate-300 font-mono">
+                  <span><strong className="text-emerald-400">{fetchedMacros.calories}</strong> kcal</span>
+                  <span>P: <strong className="text-emerald-400">{fetchedMacros.protein}g</strong></span>
+                  <span>C: <strong className="text-emerald-400">{fetchedMacros.carbs}g</strong></span>
+                  <span>F: <strong className="text-emerald-400">{fetchedMacros.fat}g</strong></span>
+                </div>
+              )}
             </div>
 
             <div className="grid grid-cols-2 gap-3">
@@ -144,7 +201,7 @@ export default function BarcodeScannerModal({ isOpen, onClose, onScanSuccess }) 
             <div className="flex gap-2 pt-2">
               <button
                 type="button"
-                onClick={() => setScannedBarcode(null)}
+                onClick={() => { setScannedBarcode(null); setFetchedMacros(null); }}
                 className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2 rounded-xl text-xs transition cursor-pointer"
               >
                 Rescan

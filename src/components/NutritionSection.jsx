@@ -174,27 +174,28 @@ export default function NutritionSection({ profile = {} }) {
     setNewMeal({ type: 'Snack', name: '', calories: '', protein: '', carbs: '', fat: '' });
   };
 
-  const handleScanSuccess = ({ barcode, name, servings, unit }) => {
-    const baseCals = 200;
-    const baseProtein = 10;
-    const baseCarbs = 24;
-    const baseFat = 6;
+  const handleScanSuccess = ({ barcode, name, servings, unit, macros }) => {
+    // Uses real API macros if available, otherwise falls back to defaults
+    const baseCals = macros ? macros.calories : 200;
+    const baseProtein = macros ? macros.protein : 10;
+    const baseCarbs = macros ? macros.carbs : 24;
+    const baseFat = macros ? macros.fat : 6;
 
-    const multiplier = Number(servings) || 1;
+    const multiplier = parseFloat(servings) || 1;
 
     setMeals((prev) => [
-        ...prev,
-        {
-          id: Date.now().toString(),
-          type: 'Snack',
-          name: name ? `${name} (${servings} ${unit})` : `Scanned Item (${servings} ${unit})`,
-          calories: Math.round(baseCals * multiplier),
-          protein: Math.round(baseProtein * multiplier),
-          carbs: Math.round(baseCarbs * multiplier),
-          fat: Math.round(baseFat * multiplier)
-        }
-      ]);
-    };
+      ...prev,
+      {
+        id: Date.now().toString(),
+        type: 'Snack',
+        name: name ? `${name} (${multiplier} ${unit})` : `Scanned Item (${multiplier} ${unit})`,
+        calories: Math.round(baseCals * multiplier),
+        protein: Math.round(baseProtein * multiplier),
+        carbs: Math.round(baseCarbs * multiplier),
+        fat: Math.round(baseFat * multiplier)
+      }
+    ]);
+  };
 
   const handleDeleteMeal = (id) => {
     setMeals((prev) => prev.filter((m) => m.id !== id));
