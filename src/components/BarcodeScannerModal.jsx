@@ -1,11 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Html5QrcodeScanner } from 'html5-qrcode';
-import { X, Camera, Scale, Tag, Loader2 } from 'lucide-react';
+import { X, Camera, Scale, Tag, Loader2, Utensils } from 'lucide-react';
 
 export default function BarcodeScannerModal({ isOpen, onClose, onScanSuccess }) {
   const scannerRef = useRef(null);
   const [scannedBarcode, setScannedBarcode] = useState(null);
   const [customName, setCustomName] = useState('');
+  const [mealType, setMealType] = useState('Snack');
   const [servings, setServings] = useState(1);
   const [servingUnit, setServingUnit] = useState('serving');
   const [isLoading, setIsLoading] = useState(false);
@@ -35,7 +36,6 @@ export default function BarcodeScannerModal({ isOpen, onClose, onScanSuccess }) 
           setIsLoading(true);
 
           try {
-            // Fetch product data from Open Food Facts API
             const res = await fetch(`https://world.openfoodfacts.org/api/v2/product/${decodedText}.json`);
             const data = await res.json();
 
@@ -46,15 +46,14 @@ export default function BarcodeScannerModal({ isOpen, onClose, onScanSuccess }) 
               const name = prod.product_name || prod.product_name_en || `Item (${decodedText})`;
               setCustomName(name);
 
-              // Calculate base macros per 100g or direct serving values
               const servingGrams = parseFloat(prod.serving_quantity) || 100;
               const scaleToServing = servingGrams / 100;
-              
+
               const calsPerServing = nutriments['energy-kcal_serving'] ?? Math.round((nutriments['energy-kcal_100g'] || 0) * scaleToServing);
               const proteinPerServing = nutriments['proteins_serving'] ?? Math.round((nutriments.proteins_100g || 0) * scaleToServing);
               const carbsPerServing = nutriments['carbohydrates_serving'] ?? Math.round((nutriments.carbohydrates_100g || 0) * scaleToServing);
               const fatPerServing = nutriments['fat_serving'] ?? Math.round((nutriments.fat_100g || 0) * scaleToServing);
-              
+
               setFetchedMacros({
                 calories: calsPerServing,
                 protein: proteinPerServing,
@@ -93,6 +92,7 @@ export default function BarcodeScannerModal({ isOpen, onClose, onScanSuccess }) 
     onScanSuccess({
       barcode: scannedBarcode,
       name: customName || `Item (${scannedBarcode})`,
+      mealType,
       servings: parseFloat(servings) || 1,
       unit: servingUnit,
       macros: fetchedMacros
@@ -104,6 +104,7 @@ export default function BarcodeScannerModal({ isOpen, onClose, onScanSuccess }) 
   const handleClose = () => {
     setScannedBarcode(null);
     setCustomName('');
+    setMealType('Snack');
     setServings(1);
     setServingUnit('serving');
     setFetchedMacros(null);
@@ -138,7 +139,7 @@ export default function BarcodeScannerModal({ isOpen, onClose, onScanSuccess }) 
           </div>
         ) : (
           <form onSubmit={handleConfirmQuantity} className="space-y-4">
-            <div className="bg-slate-800 p-3 rounded-xl border border-slate-700 space-y-2">
+            <div className="bg-slate-800 p-3 rounded-xl border border-slate-700 space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-[10px] uppercase font-bold text-slate-400">Barcode Detected</span>
                 <span className="text-xs font-bold text-emerald-400 font-mono">{scannedBarcode}</span>
@@ -154,7 +155,7 @@ export default function BarcodeScannerModal({ isOpen, onClose, onScanSuccess }) 
                   required
                   value={customName}
                   onChange={(e) => setCustomName(e.target.value)}
-                  placeholder="e.g., Greek Yogurt, Oats, Protein Bar"
+                  placeholder="e.g., Farfalle Pasta"
                   className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500"
                 />
               </div>
@@ -167,6 +168,23 @@ export default function BarcodeScannerModal({ isOpen, onClose, onScanSuccess }) 
                   <span>F: <strong className="text-emerald-400">{fetchedMacros.fat}g</strong></span>
                 </div>
               )}
+            </div>
+
+            <div>
+              <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1 flex items-center gap-1">
+                <Utensils className="w-3 h-3 text-emerald-400" />
+                Meal Category
+              </label>
+              <select
+                value={mealType}
+                onChange={(e) => setMealType(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500"
+              >
+                <option value="Breakfast">Breakfast</option>
+                <option value="Lunch">Lunch</option>
+                <option value="Dinner">Dinner</option>
+                <option value="Snack">Snack</option>
+              </select>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
