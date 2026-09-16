@@ -16,28 +16,52 @@ import {
   ChevronRight
 } from 'lucide-react';
 
-export default function WorkoutSection({ profile = {} }) {
+export default function WorkoutSection({ profile = {}, setProfile }) {
   const daysPerWeek = profile?.daysPerWeek || 4;
   const [selectedDay, setSelectedDay] = useState(1);
-  const [completedExercises, setCompletedExercises] = useState({});
   
-  // Track custom exercise substitutions: { "day_exerciseId": newExerciseObject }
-  const [swappedExercises, setSwappedExercises] = useState({});
+  // Initialize state strictly from profile storage for persistence across tab changes
+  const [completedExercises, setCompletedExercises] = useState(() => profile?.completedExercises || {});
+  const [swappedExercises, setSwappedExercises] = useState(() => profile?.swappedExercises || {});
   const [swapTarget, setSwapTarget] = useState(null);
-
-  // Cardio tracking state per day: { 1: { type: 'Running', duration: 30, distance: 3.1 }, ... }
-  const [cardioLogs, setCardioLogs] = useState({});
-  const [cardioInput, setCardioInput] = useState({
-    type: 'Running',
-    duration: '',
-    distance: ''
-  });
-
-  // Rest day mobility completion checklist: { 1: { m1: true, ... } }
-  const [mobilityLogs, setMobilityLogs] = useState({});
+  const [cardioLogs, setCardioLogs] = useState(() => profile?.cardioLogs || {});
+  const [cardioInput, setCardioInput] = useState({ type: 'Running', duration: '', distance: '' });
+  const [mobilityLogs, setMobilityLogs] = useState(() => profile?.mobilityLogs || {});
 
   // Weekly Summary Modal state
   const [showSummaryModal, setShowSummaryModal] = useState(false);
+
+  // Helper to sync state changes back to profile
+  const updateWorkoutState = (updates) => {
+    const nextCompleted = updates.completedExercises !== undefined ? updates.completedExercises : completedExercises;
+    const nextCardio = updates.cardioLogs !== undefined ? updates.cardioLogs : cardioLogs;
+    const nextMobility = updates.mobilityLogs !== undefined ? updates.mobilityLogs : mobilityLogs;
+    const nextSwapped = updates.swappedExercises !== undefined ? updates.swappedExercises : swappedExercises;
+
+    setCompletedExercises(nextCompleted);
+    setCardioLogs(nextCardio);
+    setMobilityLogs(nextMobility);
+    setSwappedExercises(nextSwapped);
+
+    if (setProfile) {
+      const completedCount = Object.values(nextCompleted).filter(Boolean).length;
+      let calories = completedCount * 35;
+      
+      Object.values(nextCardio).forEach((log) => {
+        const rate = log.type === 'Running' ? 11 : log.type === 'Cycling' ? 9 : 7;
+        calories += (log.duration || 30) * rate;
+      });
+
+      setProfile({
+        ...profile,
+        completedExercises: nextCompleted,
+        cardioLogs: nextCardio,
+        mobilityLogs: nextMobility,
+        swappedExercises: nextSwapped,
+        totalActiveCalories: calories
+      });
+    }
+  };
 
   // Calculate dynamic daily cardio recommendation based on profile goals
   const cardioTarget = useMemo(() => {
@@ -182,50 +206,50 @@ export default function WorkoutSection({ profile = {} }) {
 
   const restDayChecklist = [
     { id: 'm1', title: '5-Min Full Body Foam Rolling (Calves, IT Bands, Lats)' },
-    { id: 'm2', title: 'World\'s Greatest Stretch & Hip Openers (2 mins per side)' },
+    { id: 'm2', title: "World's Greatest Stretch & Hip Openers (2 mins per side)" },
     { id: 'm3', title: 'Hydration Goal: Drink at least 80oz of water with electrolytes' },
     { id: 'm4', title: 'Light Outdoor Walk (15-20 minutes casual pace)' }
   ];
 
   const toggleExercise = (exKey) => {
-    setCompletedExercises((prev) => ({ ...prev, [exKey]: !prev[exKey] }));
+    const updated = { ...completedExercises, [exKey]: !completedExercises[exKey] };
+    updateWorkoutState({ completedExercises: updated });
   };
 
   const toggleMobilityTask = (dayNum, taskId) => {
-    setMobilityLogs((prev) => {
-      const dayTasks = prev[dayNum] || {};
-      return {
-        ...prev,
-        [dayNum]: { ...dayTasks, [taskId]: !dayTasks[taskId] }
-      };
-    });
+    const dayTasks = mobilityLogs[dayNum] || {};
+    const updatedMobility = {
+      ...mobilityLogs,
+      [dayNum]: { ...dayTasks, [taskId]: !dayTasks[taskId] }
+    };
+    updateWorkoutState({ mobilityLogs: updatedMobility });
   };
 
   const handleApplySwap = (targetExId, newAlt) => {
     const key = `d${selectedDay}_${targetExId}`;
-    setSwappedExercises((prev) => ({ ...prev, [key]: newAlt }));
+    const updatedSwapped = { ...swappedExercises, [key]: newAlt };
+    updateWorkoutState({ swappedExercises: updatedSwapped });
     setSwapTarget(null);
   };
 
   const handleSaveCardio = (e) => {
     e.preventDefault();
     if (!cardioInput.duration) return;
-    setCardioLogs((prev) => ({
-      ...prev,
+    const updatedCardio = {
+      ...cardioLogs,
       [selectedDay]: {
         type: cardioInput.type,
         duration: parseFloat(cardioInput.duration) || 0,
         distance: parseFloat(cardioInput.distance) || 0,
       }
-    }));
+    };
+    updateWorkoutState({ cardioLogs: updatedCardio });
   };
 
   const handleRemoveCardio = () => {
-    setCardioLogs((prev) => {
-      const copy = { ...prev };
-      delete copy[selectedDay];
-      return copy;
-    });
+    const copy = { ...cardioLogs };
+    delete copy[selectedDay];
+    updateWorkoutState({ cardioLogs: copy });
   };
 
   const currentDayPlan = workoutTemplates.find((t) => t.day === selectedDay) || workoutTemplates[0];
@@ -240,22 +264,15 @@ export default function WorkoutSection({ profile = {} }) {
   const totalCardioLogged = Object.keys(cardioLogs).length;
   const currentStreak = Math.min(completedWorkoutCount + totalCardioLogged, 7);
 
-  // Active Calorie Burn Estimator calculation
   const totalActiveCalories = useMemo(() => {
-    let calories = 0;
-    // Strength workout estimation (~6 calories per completed exercise set/reps approximation)
-    calories += completedWorkoutCount * 35;
-    
-    // Cardio estimation based on type & duration/distance
+    let calories = completedWorkoutCount * 35;
     Object.values(cardioLogs).forEach((log) => {
       const rate = log.type === 'Running' ? 11 : log.type === 'Cycling' ? 9 : 7;
       calories += (log.duration || 30) * rate;
     });
-
     return calories;
   }, [completedWorkoutCount, cardioLogs]);
 
-  // Weekly aggregates for Report Modal
   const totalMilesWeekly = useMemo(() => {
     return Object.values(cardioLogs).reduce((acc, curr) => acc + (curr.distance || 0), 0).toFixed(1);
   }, [cardioLogs]);
@@ -274,7 +291,6 @@ export default function WorkoutSection({ profile = {} }) {
         </div>
 
         <div className="flex items-center gap-3">
-          {/* Streak Badge */}
           <div className="bg-slate-900 border border-slate-700/80 px-3.5 py-2 rounded-xl flex items-center gap-2.5">
             <Flame className="w-5 h-5 text-amber-400 animate-pulse" />
             <div>
@@ -283,7 +299,6 @@ export default function WorkoutSection({ profile = {} }) {
             </div>
           </div>
 
-          {/* Weekly Report Button */}
           <button
             onClick={() => setShowSummaryModal(true)}
             className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold px-3.5 py-2.5 rounded-xl text-xs flex items-center gap-2 transition cursor-pointer"
@@ -301,7 +316,7 @@ export default function WorkoutSection({ profile = {} }) {
           </div>
           <div>
             <span className="text-xs font-bold text-white block">Estimated Active Energy Burn</span>
-            <span className="text-[11px] text-slate-400">Combined output from completed strength sets and logged cardio sessions.</span>
+            <span className="text-[11px] text-slate-400">Combined output synced for nutrition net calorie calculations.</span>
           </div>
         </div>
         <div className="bg-emerald-950 border border-emerald-800 px-4 py-2 rounded-xl text-right">
@@ -360,7 +375,6 @@ export default function WorkoutSection({ profile = {} }) {
           </span>
         </div>
 
-        {/* Rest Day Interactive Mobility Guide */}
         {currentDayPlan.isRest ? (
           <div className="bg-slate-900/80 border border-slate-700/80 p-5 rounded-xl space-y-4">
             <div className="flex items-center gap-3">
@@ -369,7 +383,7 @@ export default function WorkoutSection({ profile = {} }) {
               </div>
               <div>
                 <h4 className="text-xs font-bold text-white">Active Recovery & Mobility Checklist</h4>
-                <p className="text-[11px] text-slate-400">Complete these restorative actions to accelerate muscle repair and flexibility.</p>
+                <p className="text-[11px] text-slate-400">Complete these restorative actions to accelerate muscle repair.</p>
               </div>
             </div>
 
@@ -472,7 +486,7 @@ export default function WorkoutSection({ profile = {} }) {
               <div>
                 <span className="text-xs font-bold text-white block">Goal Weight Cardio Target</span>
                 <span className="text-[10px] text-slate-400">
-                  Recommended: <strong className="text-emerald-400">{cardioTarget.miles} miles</strong> (~{cardioTarget.steps.toLocaleString()} steps) daily to reach your target weight.
+                  Recommended: <strong className="text-emerald-400">{cardioTarget.miles} miles</strong> daily to reach your target weight.
                 </span>
               </div>
             </div>
@@ -570,115 +584,88 @@ export default function WorkoutSection({ profile = {} }) {
         </div>
       </div>
 
-      {/* Weekly Summary Report Modal */}
-      {showSummaryModal && (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 max-w-md w-full space-y-5 shadow-2xl">
-            <div className="flex justify-between items-center border-b border-slate-800 pb-3">
-              <div>
-                <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                  <Sparkles className="w-4 h-4 text-emerald-400" /> Weekly Progress Summary
-                </h3>
-                <p className="text-[11px] text-slate-400 mt-0.5">Reviewing your performance metrics for this week.</p>
-              </div>
-              <button
-                onClick={() => setShowSummaryModal(false)}
-                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition cursor-pointer"
+      {/* Swap Modal */}
+      {swapTarget && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-700 w-full max-w-md rounded-2xl p-6 space-y-4">
+            <div className="flex justify-between items-center">
+              <h3 className="text-sm font-bold text-white">Substitute Exercise</h3>
+              <button 
+                onClick={() => setSwapTarget(null)}
+                className="text-slate-400 hover:text-white cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
+            
+            <p className="text-xs text-slate-400">
+              Select an alternative exercise for <strong className="text-slate-200">{swapTarget.baseEx.name}</strong>:
+            </p>
 
-            <div className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="bg-slate-950 border border-slate-800 p-3.5 rounded-xl text-center">
-                  <span className="text-[10px] text-slate-400 uppercase font-semibold block">Total Cardio Distance</span>
-                  <span className="text-lg font-extrabold text-emerald-400 mt-0.5 block">{totalMilesWeekly} <span className="text-xs font-normal">miles</span></span>
+            <div className="space-y-2">
+              {swapTarget.baseEx.alternatives.map((alt, idx) => (
+                <div 
+                  key={idx}
+                  onClick={() => handleApplySwap(swapTarget.baseEx.id, alt)}
+                  className="p-3 rounded-xl bg-slate-800 border border-slate-700 hover:border-emerald-500/50 cursor-pointer transition flex items-center justify-between"
+                >
+                  <div>
+                    <span className="text-xs font-bold text-white block">{alt.name}</span>
+                    <span className="text-[10px] text-slate-400">{alt.sets} Sets × {alt.reps} reps</span>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-slate-500" />
                 </div>
-                <div className="bg-slate-950 border border-slate-800 p-3.5 rounded-xl text-center">
-                  <span className="text-[10px] text-slate-400 uppercase font-semibold block">Workouts Logged</span>
-                  <span className="text-lg font-extrabold text-white mt-0.5 block">{completedWorkoutCount} <span className="text-xs font-normal text-slate-400">sets</span></span>
-                </div>
-              </div>
-
-              <div className="bg-slate-950 border border-slate-800 p-4 rounded-xl space-y-2">
-                <div className="flex justify-between text-xs">
-                  <span className="text-slate-400">Current Active Streak</span>
-                  <span className="font-bold text-amber-400">{currentStreak} Days</span>
-                </div>
-                <div className="flex justify-between text-xs">
-                  <span className="text-slate-400">Total Active Energy Burn</span>
-                  <span className="font-bold text-emerald-400">{totalActiveCalories} kcal</span>
-                </div>
-                <div className="flex justify-between text-xs">
-                  <span className="text-slate-400">Target Weight Goal</span>
-                  <span className="font-bold text-white">{profile?.targetWeight || 165} lbs</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="pt-1">
-              <button
-                onClick={() => setShowSummaryModal(false)}
-                className="w-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold py-2.5 rounded-xl text-xs transition cursor-pointer"
-              >
-                Close Summary
-              </button>
+              ))}
             </div>
           </div>
         </div>
       )}
 
-      {/* Exercise Swap Selection Modal */}
-      {swapTarget && (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 max-w-md w-full space-y-4 shadow-2xl">
-            <div className="flex justify-between items-center border-b border-slate-800 pb-3">
-              <div>
-                <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                  <RefreshCw className="w-4 h-4 text-emerald-400" /> Substitute Exercise
-                </h3>
-                <p className="text-[11px] text-slate-400 mt-0.5">
-                  Replacing: <span className="text-white font-medium">{swapTarget.baseEx.name}</span>
-                </p>
+      {/* Weekly Summary Modal */}
+      {showSummaryModal && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-700 w-full max-w-lg rounded-2xl p-6 space-y-5">
+            <div className="flex justify-between items-center">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-emerald-400" />
+                <h3 className="text-base font-bold text-white">Weekly Training Summary</h3>
               </div>
-              <button
-                onClick={() => setSwapTarget(null)}
-                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition cursor-pointer"
+              <button 
+                onClick={() => setShowSummaryModal(false)}
+                className="text-slate-400 hover:text-white cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="space-y-2 pt-1">
-              <span className="text-xs font-semibold text-slate-300 block">Choose a similar alternative:</span>
-              
-              <button
-                onClick={() => handleApplySwap(swapTarget.baseEx.id, swapTarget.baseEx)}
-                className="w-full text-left p-3 rounded-xl border border-slate-800 bg-slate-950 hover:border-slate-700 transition cursor-pointer"
-              >
-                <span className="text-xs font-bold text-emerald-400 block">Original Exercise</span>
-                <span className="text-[10px] text-slate-400">{swapTarget.baseEx.name} ({swapTarget.baseEx.sets} sets × {swapTarget.baseEx.reps})</span>
-              </button>
-
-              {swapTarget.baseEx.alternatives?.map((alt, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => handleApplySwap(swapTarget.baseEx.id, alt)}
-                  className="w-full text-left p-3 rounded-xl border border-slate-800 bg-slate-950 hover:border-emerald-500/40 hover:bg-slate-900 transition cursor-pointer"
-                >
-                  <span className="text-xs font-bold text-white block">{alt.name}</span>
-                  <span className="text-[10px] text-slate-400">{alt.sets} Sets × {alt.reps} reps · {alt.rest} rest</span>
-                </button>
-              ))}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-slate-800/80 border border-slate-700 p-3.5 rounded-xl">
+                <span className="text-[10px] text-slate-400 font-semibold uppercase block">Workouts Finished</span>
+                <span className="text-xl font-extrabold text-white mt-0.5 block">{completedWorkoutCount} <span className="text-xs font-normal text-slate-400">Sessions</span></span>
+              </div>
+              <div className="bg-slate-800/80 border border-slate-700 p-3.5 rounded-xl">
+                <span className="text-[10px] text-slate-400 font-semibold uppercase block">Cardio Distance</span>
+                <span className="text-xl font-extrabold text-white mt-0.5 block">{totalMilesWeekly} <span className="text-xs font-normal text-emerald-400">Miles</span></span>
+              </div>
             </div>
 
-            <div className="pt-2">
+            <div className="bg-slate-950 border border-slate-800 p-4 rounded-xl space-y-2">
+              <span className="text-xs font-bold text-emerald-400 flex items-center gap-1.5">
+                <Trophy className="w-4 h-4" /> Coach's Performance Note
+              </span>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                {completedWorkoutCount >= 3 
+                  ? "Outstanding consistency this week! Your progressive overload and active calorie expenditure are hitting target thresholds for body recomposition."
+                  : "You're building momentum. Complete remaining workouts and daily cardio targets to maximize net calorie deficit goals."}
+              </p>
+            </div>
+
+            <div className="flex justify-end pt-1">
               <button
-                onClick={() => setSwapTarget(null)}
-                className="w-full bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2 rounded-xl text-xs transition cursor-pointer"
+                onClick={() => setShowSummaryModal(false)}
+                className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold px-4 py-2 rounded-xl text-xs transition cursor-pointer"
               >
-                Cancel
+                Close Summary
               </button>
             </div>
           </div>

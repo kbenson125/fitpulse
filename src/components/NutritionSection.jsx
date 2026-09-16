@@ -15,7 +15,9 @@ import {
   ArrowRightLeft,
   BookOpen,
   Sparkles,
-  Loader2
+  Loader2,
+  Droplets,
+  Minus
 } from 'lucide-react';
 
 import BarcodeScannerModal from './BarcodeScannerModal';
@@ -134,7 +136,7 @@ const generateVariedWeeklyPlan = (recipes, exclusions) => {
 };
 
 
-export default function NutritionSection({ profile = {} }) {
+export default function NutritionSection({ profile = {}, setProfile }) {
   const [activeTab, setActiveTab] = useState('tracker');
   const [selectedRecipeModal, setSelectedRecipeModal] = useState(null);
   const [showScannerModal, setShowScannerModal] = useState(false);
@@ -150,6 +152,9 @@ export default function NutritionSection({ profile = {} }) {
   const [excludedFoods, setExcludedFoods] = useState(['Seafood']);
   const [newExclusion, setNewExclusion] = useState('');
   const [meals, setMeals] = useState([]);
+
+  // Water Tracker State
+  const [waterConsumedMl, setWaterConsumedMl] = useState(0);
 
   // Smart Query Meal Form States
   const [naturalQuery, setNaturalQuery] = useState('');
@@ -169,20 +174,70 @@ export default function NutritionSection({ profile = {} }) {
     generateVariedWeeklyPlan(initialDetailedRecipes, ['Seafood', 'Peanuts'])
   );
 
+  // Dynamic Macro and Calorie Target Calculation based on User Profile Inputs
   const targets = useMemo(() => {
-    const current = profile?.currentWeight || 180;
+    const weightKg = (profile?.currentWeight || 180) / 2.20462; 
+    const heightCm = profile?.heightCm || 175; 
+    const ageYears = profile?.age || 30;
+    const gender = (profile?.gender || 'male').toLowerCase();
+    const activityLevel = profile?.activityLevel || 'moderately_active';
     const goal = profile?.goal || 'weight_loss';
 
-    let baseCalories = current * 12;
-    if (goal === 'weight_loss') baseCalories -= 500;
-    if (goal === 'muscle_gain') baseCalories += 300;
+    let bmr = (10 * weightKg) + (6.25 * heightCm) - (5 * ageYears);
+    if (gender === 'female') {
+      bmr -= 161;
+    } else {
+      bmr += 5;
+    }
+
+    const activityMultipliers = {
+      sedentary: 1.2,
+      lightly_active: 1.375,
+      moderately_active: 1.55,
+      very_active: 1.725,
+      extra_active: 1.9
+    };
+    const multiplier = activityMultipliers[activityLevel] || 1.55;
+    let tdee = bmr * multiplier;
+
+    let targetCalories = tdee;
+    if (goal === 'weight_loss' || goal === 'fat_loss') {
+      targetCalories -= 500; 
+    } else if (goal === 'muscle_gain' || goal === 'bulking') {
+      targetCalories += 300;
+    }
+    targetCalories = Math.max(1200, Math.round(targetCalories)); 
+
+    const targetProtein = Math.round((profile?.currentWeight || 180) * 1.0);
+    const proteinCalories = targetProtein * 4;
+
+    const fatCalories = targetCalories * 0.25;
+    const targetFat = Math.round(fatCalories / 9);
+
+    const carbCalories = Math.max(0, targetCalories - (proteinCalories + fatCalories));
+    const targetCarbs = Math.round(carbCalories / 4);
 
     return {
-      calories: Math.round(baseCalories),
-      protein: Math.round(current * 1.0),
-      carbs: Math.round((baseCalories * 0.4) / 4),
-      fat: Math.round((baseCalories * 0.25) / 9)
+      calories: targetCalories,
+      protein: targetProtein,
+      carbs: targetCarbs,
+      fat: targetFat
     };
+  }, [profile]);
+
+  // Dynamic Water Target Calculation based on Weight and Activity
+  const waterTargetMl = useMemo(() => {
+    const weightLbs = profile?.currentWeight || 180;
+    let baseMl = (weightLbs * 0.65) * 29.5735; 
+    
+    const activityLevel = profile?.activityLevel || 'moderately_active';
+    if (activityLevel === 'very_active' || activityLevel === 'extra_active') {
+      baseMl += 500;
+    } else if (activityLevel === 'moderately_active') {
+      baseMl += 350;
+    }
+    
+    return Math.round(baseMl / 50) * 50; 
   }, [profile]);
 
   const consumed = useMemo(() => {
@@ -197,6 +252,10 @@ export default function NutritionSection({ profile = {} }) {
     );
   }, [meals]);
 
+  // Active Calories Burned Sync from Workout Profile State
+  const activeCaloriesBurned = profile?.totalActiveCalories || 0;
+  const netCalories = consumed.calories - activeCaloriesBurned;
+
   // Smart Natural Language Nutrition Lookup
   const handleCalculateNutrition = async (e, customText) => {
     if (e) e.preventDefault();
@@ -206,7 +265,6 @@ export default function NutritionSection({ profile = {} }) {
     setIsQuerying(true);
 
     try {
-      // Step 1: Parse quantity, unit, and food item name from text string
       const matches = queryToUse.trim().match(/^([\d.]+)?\s*([a-zA-Z]*)\s+(.+)$/);
       let qty = 1;
       let unit = '';
@@ -218,7 +276,6 @@ export default function NutritionSection({ profile = {} }) {
         searchTerm = matches[3] || queryToUse.trim();
       }
 
-      // Step 2: Query Open Food Facts Search API
       const res = await fetch(`https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(searchTerm)}&search_simple=1&action=process&json=1`);
       const data = await res.json();
 
@@ -226,7 +283,6 @@ export default function NutritionSection({ profile = {} }) {
         const prod = data.products[0];
         const nutriments = prod.nutriments || {};
 
-        // Calculate scaling multiplier based on weight/volume units if specified
         let gramMultiplier = qty;
         if (unit === 'g' || unit === 'grams') {
           gramMultiplier = qty / 100;
@@ -252,7 +308,6 @@ export default function NutritionSection({ profile = {} }) {
           fat: Math.round(baseFat * gramMultiplier) || 0
         }));
       } else {
-        // Safe standard fallback for common queries if API search has no direct hit
         setNewMeal((prev) => ({
           ...prev,
           name: queryToUse,
@@ -461,7 +516,7 @@ export default function NutritionSection({ profile = {} }) {
             <Utensils className="text-emerald-400 w-5 h-5" /> Nutrition & Meal Planner Hub
           </h2>
           <p className="text-xs text-slate-400 mt-1">
-            Track macros, scan barcodes, auto-calculate food portions, and customize meal plans.
+            Track custom macros, tailored water intake targets, scan barcodes, and adjust meal plans.
           </p>
         </div>
 
@@ -484,10 +539,28 @@ export default function NutritionSection({ profile = {} }) {
       {/* TAB 1: MACRO TRACKER */}
       {activeTab === 'tracker' && (
         <div className="space-y-6">
-          <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+          {/* Net Calorie Summary Widget */}
+          <div className="bg-slate-800 p-5 rounded-2xl border border-slate-700 grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="bg-slate-900 border border-slate-700/60 p-3.5 rounded-xl">
+              <span className="text-[10px] text-slate-400 font-bold uppercase block">Calories Consumed</span>
+              <span className="text-xl font-extrabold text-white mt-0.5 block">{consumed.calories} <span className="text-xs font-normal text-slate-400">kcal</span></span>
+            </div>
+
+            <div className="bg-slate-900 border border-emerald-500/30 p-3.5 rounded-xl">
+              <span className="text-[10px] text-emerald-400 font-bold uppercase block">Active Burn (Workout)</span>
+              <span className="text-xl font-extrabold text-white mt-0.5 block">-{activeCaloriesBurned} <span className="text-xs font-normal text-emerald-400">kcal</span></span>
+            </div>
+
+            <div className="bg-slate-900 border border-slate-700/60 p-3.5 rounded-xl">
+              <span className="text-[10px] text-slate-400 font-bold uppercase block">Net Calories</span>
+              <span className="text-xl font-extrabold text-emerald-400 mt-0.5 block">{netCalories} <span className="text-xs font-normal text-slate-400">kcal</span></span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-5 gap-4">
             <div className="bg-slate-800 p-4 rounded-2xl border border-slate-700 space-y-2">
               <div className="flex justify-between items-center text-xs">
-                <span className="text-slate-400 font-semibold">Calories</span>
+                <span className="text-slate-400 font-semibold">Calories Target</span>
                 <span className="text-white font-bold">{consumed.calories} / {targets.calories}</span>
               </div>
               <div className="w-full bg-slate-900 rounded-full h-2 overflow-hidden border border-slate-700/60">
@@ -519,6 +592,89 @@ export default function NutritionSection({ profile = {} }) {
               </div>
               <div className="w-full bg-slate-900 rounded-full h-2 overflow-hidden border border-slate-700/60">
                 <div className="bg-amber-500 h-full transition-all duration-500" style={{ width: `${Math.min(Math.round((consumed.fat / targets.fat) * 100), 100)}%` }}></div>
+              </div>
+            </div>
+            <div className="bg-slate-800 p-4 rounded-2xl border border-slate-700 space-y-2">
+              <div className="flex justify-between items-center text-xs">
+                <span className="text-cyan-400 font-semibold flex items-center gap-1"><Droplets className="w-3.5 h-3.5" /> Water</span>
+                <span className="text-white font-bold">{waterConsumedMl} / {waterTargetMl} ml</span>
+              </div>
+              <div className="w-full bg-slate-900 rounded-full h-2 overflow-hidden border border-slate-700/60">
+                <div className="bg-cyan-500 h-full transition-all duration-500" style={{ width: `${Math.min(Math.round((waterConsumedMl / waterTargetMl) * 100), 100)}%` }}></div>
+              </div>
+            </div>
+          </div>
+
+          {/* WATER TRACKER WIDGET SECTION */}
+          <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                  <Droplets className="text-cyan-400 w-4 h-4" /> Daily Water Intake Tracker
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Tailored target: {waterTargetMl} ml based on your profile specs.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold bg-cyan-950 text-cyan-400 border border-cyan-800 px-3 py-1 rounded-xl">
+                  {Math.round((waterConsumedMl / waterTargetMl) * 100)}% Completed
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setWaterConsumedMl(0)}
+                  className="text-xs bg-slate-900 border border-slate-700 text-slate-400 hover:text-white px-2.5 py-1 rounded-xl transition cursor-pointer"
+                >
+                  Reset
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+              <button
+                type="button"
+                onClick={() => setWaterConsumedMl((prev) => Math.max(0, prev - 250))}
+                className="bg-slate-900 hover:bg-slate-700 border border-slate-700 text-slate-300 font-bold py-2.5 px-3 rounded-xl text-xs flex items-center justify-center gap-1.5 transition cursor-pointer"
+              >
+                <Minus className="w-3.5 h-3.5 text-rose-400" /> 250 ml
+              </button>
+              <button
+                type="button"
+                onClick={() => setWaterConsumedMl((prev) => prev + 250)}
+                className="bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/40 text-cyan-300 font-bold py-2.5 px-3 rounded-xl text-xs flex items-center justify-center gap-1.5 transition cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" /> 250 ml (Glass)
+              </button>
+              <button
+                type="button"
+                onClick={() => setWaterConsumedMl((prev) => prev + 500)}
+                className="bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/40 text-cyan-300 font-bold py-2.5 px-3 rounded-xl text-xs flex items-center justify-center gap-1.5 transition cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" /> 500 ml (Bottle)
+              </button>
+              <button
+                type="button"
+                onClick={() => setWaterConsumedMl((prev) => prev + 750)}
+                className="bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/40 text-cyan-300 font-bold py-2.5 px-3 rounded-xl text-xs flex items-center justify-center gap-1.5 transition cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" /> 750 ml (Large)
+              </button>
+              <div className="col-span-2 sm:col-span-1 flex items-center">
+                <input
+                  type="number"
+                  placeholder="Custom ml"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      const val = parseInt(e.target.value, 10);
+                      if (!isNaN(val) && val > 0) {
+                        setWaterConsumedMl((prev) => prev + val);
+                        e.target.value = '';
+                      }
+                    }
+                  }}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white text-center focus:outline-none focus:border-cyan-500"
+                  title="Type amount in ml and press Enter"
+                />
               </div>
             </div>
           </div>
