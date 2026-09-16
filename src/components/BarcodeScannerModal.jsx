@@ -1,166 +1,176 @@
-import React, { useEffect, useState, useRef } from 'react';
-import { Html5QrcodeScanner } from 'html5-qrcode';
-import { X, Camera, AlertCircle, Loader2 } from 'lucide-react';
-import { fetchNutritionByBarcode } from '../utils/barcodeService';
+import React, { useEffect, useRef, useState } from 'react';
+import { Camera, X, AlertCircle, RefreshCw } from 'lucide-react';
 
-export default function BarcodeScannerModal({ onClose, onLogMeal }) {
-  const [scannedProduct, setScannedProduct] = useState(null);
-  const [servings, setServings] = useState(1);
-  const [isLoading, setIsLoading] = useState(false);
-  const [errorMessage, setErrorMessage] = useState('');
-  const scannerRef = useRef(null);
+export default function BarcodeScannerModal({ isOpen, onClose, onScanSuccess }) {
+  const videoRef = useRef(null);
+  const streamRef = useRef(null);
+  const animationFrameRef = useRef(null);
 
-  useEffect(() => {
-    // Initialize html5-qrcode camera viewer
-    const scanner = new Html5QrcodeScanner(
-      'barcode-reader-view',
-      { fps: 10, qrbox: { width: 250, height: 150 } },
-      false
-    );
+  const [permissionError, setPermissionError] = useState(null);
+  const [isInitializing, setIsInitializing] = useState(true);
 
-    scanner.render(
-      async (decodedText) => {
-        setIsLoading(true);
-        setErrorMessage('');
-        
-        // Stop scanning upon successful capture
-        scanner.clear().catch(() => {});
+  // Start Real Camera Stream
+  const startCamera = async () => {
+    setIsInitializing(true);
+    setPermissionError(null);
 
-        const result = await fetchNutritionByBarcode(decodedText);
-        setIsLoading(false);
+    try {
+      // Request rear camera preferably, fallback to default camera
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'environment' } }
+      });
 
-        if (result.success) {
-          setScannedProduct(result.product);
-        } else {
-          setErrorMessage(result.error);
-        }
-      },
-      () => {
-        // Ignore camera frame parsing errors
+      streamRef.current = stream;
+
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.setAttribute('playsinline', true); // critical for mobile web
+        await videoRef.current.play();
+        setIsInitializing(false);
+
+        // Initiate continuous scanning loop
+        scanBarcodeFrame();
       }
-    );
+    } catch (err) {
+      console.error('Camera access error:', err);
+      setIsInitializing(false);
 
-    scannerRef.current = scanner;
-
-    return () => {
-      if (scannerRef.current) {
-        scannerRef.current.clear().catch(() => {});
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        setPermissionError('Camera access was denied. Please allow camera permissions in your browser settings.');
+      } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+        setPermissionError('No camera device found on this system.');
+      } else {
+        setPermissionError('Unable to access camera feed. Please check your system settings.');
       }
-    };
-  }, []);
-
-  const handleConfirmLog = () => {
-    if (!scannedProduct) return;
-
-    const qty = parseFloat(servings) || 1;
-
-    const finalMealEntry = {
-      id: Date.now(),
-      foodName: `${scannedProduct.name} (${qty} serving${qty > 1 ? 's' : ''})`,
-      grams: 0,
-      calories: Math.round(scannedProduct.servingCalories * qty),
-      protein: Math.round(scannedProduct.servingProtein * qty),
-      carbs: Math.round(scannedProduct.servingCarbs * qty),
-      fat: Math.round(scannedProduct.servingFat * qty)
-    };
-
-    onLogMeal(finalMealEntry);
-    onClose();
+    }
   };
 
+  // Stop Camera Stream & Clean up
+  const stopCamera = () => {
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+    }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+  };
+
+  // Scan frame loop using native BarcodeDetector API if supported
+  const scanBarcodeFrame = async () => {
+    if (!videoRef.current || videoRef.current.readyState !== videoRef.current.HAVE_ENOUGH_DATA) {
+      animationFrameRef.current = requestAnimationFrame(scanBarcodeFrame);
+      return;
+    }
+
+    if ('BarcodeDetector' in window) {
+      try {
+        const barcodeDetector = new window.BarcodeDetector({
+          formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'qr_code', 'code_128']
+        });
+
+        const barcodes = await barcodeDetector.detect(videoRef.current);
+        if (barcodes.length > 0) {
+          const detectedValue = barcodes[0].rawValue;
+          stopCamera();
+          if (onScanSuccess) {
+            onScanSuccess(detectedValue);
+          }
+          onClose();
+          return;
+        }
+      } catch (e) {
+        console.warn('Barcode detection failed on frame:', e);
+      }
+    }
+
+    animationFrameRef.current = requestAnimationFrame(scanBarcodeFrame);
+  };
+
+  useEffect(() => {
+    if (isOpen) {
+      startCamera();
+    } else {
+      stopCamera();
+    }
+
+    return () => {
+      stopCamera();
+    };
+  }, [isOpen]);
+
+  if (!isOpen) return null;
+
   return (
-    <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-      <div className="bg-slate-800 border border-slate-700 w-full max-w-md rounded-2xl p-6 shadow-2xl space-y-4 relative">
-        <button onClick={onClose} className="absolute top-4 right-4 text-slate-400 hover:text-white cursor-pointer">
-          <X className="w-5 h-5" />
-        </button>
-
-        <h3 className="text-lg font-bold text-white flex items-center gap-2">
-          <Camera className="w-5 h-5 text-emerald-400" /> Barcode Scanner
-        </h3>
-
-        {!scannedProduct && !isLoading && (
-          <div className="space-y-3">
-            <p className="text-xs text-slate-400">Point your camera at the food product barcode:</p>
-            <div id="barcode-reader-view" className="overflow-hidden rounded-xl border border-slate-700 bg-slate-900" />
-            {errorMessage && (
-              <div className="flex items-center gap-2 text-rose-400 text-xs bg-rose-950/50 p-2.5 rounded-lg border border-rose-800">
-                <AlertCircle className="w-4 h-4 shrink-0" /> {errorMessage}
-              </div>
-            )}
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl">
+        
+        {/* Header */}
+        <div className="flex items-center justify-between p-4 border-b border-slate-800">
+          <div className="flex items-center gap-2">
+            <Camera className="w-5 h-5 text-emerald-400" />
+            <h3 className="font-bold text-sm text-white">Barcode & Food Scanner</h3>
           </div>
-        )}
+          <button
+            onClick={() => {
+              stopCamera();
+              onClose();
+            }}
+            className="text-slate-400 hover:text-white transition cursor-pointer p-1"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
 
-        {isLoading && (
-          <div className="py-12 flex flex-col items-center justify-center space-y-3 text-emerald-400">
-            <Loader2 className="w-8 h-8 animate-spin" />
-            <span className="text-xs text-slate-300">Fetching nutrition details...</span>
-          </div>
-        )}
-
-        {scannedProduct && (
-          <div className="space-y-4 pt-2">
-            <div className="bg-slate-900 p-3.5 rounded-xl border border-slate-700">
-              <span className="text-[10px] text-emerald-400 font-bold uppercase tracking-wider block">
-                {scannedProduct.brand || 'Scanned Item'}
-              </span>
-              <h4 className="text-base font-bold text-white">{scannedProduct.name}</h4>
-              <p className="text-xs text-slate-400 mt-1">Base Serving: {scannedProduct.servingSizeText}</p>
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="text-xs text-slate-300 font-medium block">How many servings did you eat?</label>
-              <input
-                type="number"
-                step="0.25"
-                min="0.1"
-                value={servings}
-                onChange={(e) => setServings(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-xs text-white focus:outline-none focus:border-emerald-500"
-              />
-            </div>
-
-            {/* Dynamic Calculated Breakdown */}
-            <div className="bg-slate-900/60 p-3 rounded-xl border border-slate-700/60 text-xs space-y-2">
-              <span className="text-slate-400 font-semibold block uppercase text-[10px]">Calculated Breakdown</span>
-              <div className="grid grid-cols-4 gap-2 text-center">
+        {/* Camera Viewport Body */}
+        <div className="p-6 space-y-4">
+          {permissionError ? (
+            <div className="space-y-4">
+              <div className="bg-rose-500/10 border border-rose-500/20 rounded-xl p-4 flex items-start gap-3 text-rose-400 text-xs">
+                <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
                 <div>
-                  <span className="text-slate-400 block text-[10px]">Calories</span>
-                  <span className="text-amber-400 font-bold">{Math.round(scannedProduct.servingCalories * (parseFloat(servings) || 1))} kcal</span>
-                </div>
-                <div>
-                  <span className="text-slate-400 block text-[10px]">Protein</span>
-                  <span className="text-indigo-400 font-bold">{Math.round(scannedProduct.servingProtein * (parseFloat(servings) || 1))}g</span>
-                </div>
-                <div>
-                  <span className="text-slate-400 block text-[10px]">Carbs</span>
-                  <span className="text-emerald-400 font-bold">{Math.round(scannedProduct.servingCarbs * (parseFloat(servings) || 1))}g</span>
-                </div>
-                <div>
-                  <span className="text-slate-400 block text-[10px]">Fat</span>
-                  <span className="text-yellow-400 font-bold">{Math.round(scannedProduct.servingFat * (parseFloat(servings) || 1))}g</span>
+                  <p className="font-semibold text-rose-300">Camera Access Blocked</p>
+                  <p className="mt-1 leading-relaxed">{permissionError}</p>
                 </div>
               </div>
+              <button
+                onClick={startCamera}
+                className="w-full flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-white font-bold py-2.5 rounded-xl text-xs transition cursor-pointer border border-slate-700"
+              >
+                <RefreshCw className="w-4 h-4" /> Retry Access
+              </button>
             </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="relative overflow-hidden rounded-xl border border-slate-800 bg-slate-950 aspect-square flex items-center justify-center">
+                
+                {/* Video Stream Element */}
+                <video
+                  ref={videoRef}
+                  className="absolute inset-0 w-full h-full object-cover"
+                />
 
-            <div className="flex justify-end gap-2 pt-2">
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-4 py-2 text-xs text-slate-400 hover:text-white cursor-pointer"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleConfirmLog}
-                className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold px-4 py-2 rounded-lg text-xs cursor-pointer"
-              >
-                Log Meal
-              </button>
+                {/* Live Scanning Reticle Overlay */}
+                <div className="absolute inset-0 pointer-events-none flex flex-col items-center justify-center">
+                  <div className="w-48 h-48 border-2 border-emerald-400/80 rounded-2xl relative shadow-[0_0_15px_rgba(52,211,153,0.3)]">
+                    <div className="absolute top-1/2 left-0 right-0 h-0.5 bg-emerald-400/60 animate-pulse"></div>
+                  </div>
+                </div>
+
+                {isInitializing && (
+                  <div className="absolute inset-0 bg-slate-950/80 flex items-center justify-center gap-2 text-xs text-slate-400">
+                    <RefreshCw className="w-4 h-4 animate-spin text-emerald-400" /> Requesting Camera...
+                  </div>
+                )}
+              </div>
+
+              <p className="text-center text-xs text-slate-400">
+                Center barcode within the target box to automatically scan.
+              </p>
             </div>
-          </div>
-        )}
+          )}
+        </div>
+
       </div>
     </div>
   );
