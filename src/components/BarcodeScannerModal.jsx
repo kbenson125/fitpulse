@@ -1,210 +1,142 @@
+import React, { useEffect, useRef, useState } from 'react';
+import { Html5QrcodeScanner } from 'html5-qrcode';
+import { X, Camera, Scale } from 'lucide-react';
 
-import React, { useEffect, useRef, useState } from "react";
-import { Camera, X, AlertCircle } from "lucide-react";
-import {
-  Html5QrcodeScanner,
-  Html5QrcodeSupportedFormats,
-  Html5QrcodeScanType,
-} from "html5-qrcode";
-
-export default function BarcodeScannerModal({
-  isOpen,
-  onClose,
-  onScanSuccess,
-}) {
-  const [cameraError, setCameraError] = useState(null);
+export default function BarcodeScannerModal({ isOpen, onClose, onScanSuccess }) {
   const scannerRef = useRef(null);
-  const isScanningRef = useRef(false);
+  const [scannedBarcode, setScannedBarcode] = useState(null);
+  const [servings, setServings] = useState(1);
+  const [servingUnit, setServingUnit] = useState('serving');
 
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen || scannedBarcode) return;
 
-    setCameraError(null);
-    isScanningRef.current = false;
+    const timeoutId = setTimeout(() => {
+      const scanner = new Html5QrcodeScanner(
+        'html5-qrcode-reader',
+        {
+          fps: 10,
+          qrbox: { width: 250, height: 150 },
+          aspectRatio: 1.0,
+        },
+        false
+      );
 
-    let timer;
+      scannerRef.current = scanner;
 
-    const initializeScanner = () => {
-      try {
-        const readerElement = document.getElementById(
-          "html5-qrcode-reader"
-        );
-
-        if (!readerElement) {
-          setCameraError(
-            "The barcode scanner could not be initialized. Please close and reopen the scanner."
-          );
-          return;
-        }
-
-        const formatsToSupport = [
-          Html5QrcodeSupportedFormats.UPC_A,
-          Html5QrcodeSupportedFormats.UPC_E,
-          Html5QrcodeSupportedFormats.EAN_13,
-          Html5QrcodeSupportedFormats.EAN_8,
-        ];
-
-        const scanner = new Html5QrcodeScanner(
-          "html5-qrcode-reader",
-          {
-            fps: 10,
-            qrbox: {
-              width: 280,
-              height: 160,
-            },
-            aspectRatio: 1.777778,
-            formatsToSupport,
-            supportedScanTypes: [
-              Html5QrcodeScanType.SCAN_TYPE_CAMERA,
-            ],
-            rememberLastUsedCamera: true,
-            showTorchButtonIfSupported: true,
-          },
-          false
-        );
-
-        scannerRef.current = scanner;
-
-        scanner.render(
-          async (decodedText) => {
-            if (isScanningRef.current) return;
-
-            isScanningRef.current = true;
-
-            console.log("Barcode detected:", decodedText);
-
-            try {
-              await scanner.clear();
-            } catch (error) {
-              console.error(
-                "Error stopping barcode scanner:",
-                error
-              );
-            }
-
-            scannerRef.current = null;
-
-            if (onScanSuccess) {
-              onScanSuccess(decodedText);
-            }
-
-            if (onClose) {
-              onClose();
-            }
-          },
-          (errorMessage) => {
-            // Normal scanning errors are ignored.
-          }
-        );
-      } catch (error) {
-        console.error(
-          "Barcode scanner initialization error:",
-          error
-        );
-
-        setCameraError(
-          "Unable to initialize the camera. Please make sure your browser has permission to use the camera."
-        );
-      }
-    };
-
-    timer = setTimeout(initializeScanner, 150);
+      scanner.render(
+        (decodedText) => {
+          scanner.clear().catch((err) => console.error('Failed to clear scanner:', err));
+          scannerRef.current = null;
+          setScannedBarcode(decodedText);
+        },
+        () => {}
+      );
+    }, 100);
 
     return () => {
-      clearTimeout(timer);
-
-      isScanningRef.current = true;
-
+      clearTimeout(timeoutId);
       if (scannerRef.current) {
-        scannerRef.current
-          .clear()
-          .catch((error) => {
-            console.error(
-              "Barcode scanner cleanup error:",
-              error
-            );
-          });
-
+        scannerRef.current.clear().catch((err) => console.error('Failed to clear scanner on unmount:', err));
         scannerRef.current = null;
       }
     };
-  }, [isOpen, onScanSuccess, onClose]);
+  }, [isOpen, scannedBarcode]);
 
-  if (!isOpen) {
-    return null;
-  }
+  const handleConfirmQuantity = (e) => {
+    e.preventDefault();
+    if (!scannedBarcode) return;
+
+    onScanSuccess({
+      barcode: scannedBarcode,
+      servings: Number(servings) || 1,
+      unit: servingUnit
+    });
+
+    handleClose();
+  };
+
+  const handleClose = () => {
+    setScannedBarcode(null);
+    setServings(1);
+    setServingUnit('serving');
+    onClose();
+  };
+
+  if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl">
-
-        <div className="flex items-center justify-between p-4 border-b border-slate-800">
-          <div className="flex items-center gap-2">
-            <Camera className="w-5 h-5 text-emerald-400" />
-
-            <h3 className="font-bold text-sm text-white">
-              Scan Food Barcode
-            </h3>
-          </div>
-
-          <button
-            type="button"
-            onClick={onClose}
-            className="text-slate-400 hover:text-white transition cursor-pointer p-1"
-            aria-label="Close barcode scanner"
-          >
+    <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-xl">
+        <div className="flex justify-between items-center border-b border-slate-800 pb-3">
+          <h3 className="text-sm font-bold text-white flex items-center gap-2">
+            {scannedBarcode ? <Scale className="text-emerald-400 w-4 h-4" /> : <Camera className="text-emerald-400 w-4 h-4" />}
+            {scannedBarcode ? 'Confirm Portion Size' : 'Scan Food Barcode'}
+          </h3>
+          <button onClick={handleClose} className="text-slate-400 hover:text-white transition cursor-pointer">
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <div className="p-6 space-y-4">
-          {cameraError ? (
-            <div className="bg-rose-500/10 border border-rose-500/20 rounded-xl p-4 flex items-start gap-3 text-rose-400 text-xs">
-              <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
+        {!scannedBarcode ? (
+          <div className="space-y-3">
+            <p className="text-xs text-slate-400">Position the product barcode within the camera frame below.</p>
+            <div id="html5-qrcode-reader" className="overflow-hidden rounded-xl border border-slate-700 bg-slate-950 text-white"></div>
+          </div>
+        ) : (
+          <form onSubmit={handleConfirmQuantity} className="space-y-4">
+            <div className="bg-slate-800 p-3 rounded-xl border border-slate-700">
+              <span className="text-[10px] uppercase font-bold text-slate-400">Barcode Detected</span>
+              <p className="text-sm font-bold text-emerald-400 font-mono mt-0.5">{scannedBarcode}</p>
+            </div>
 
-              <div className="space-y-2">
-                <p className="font-medium">
-                  {cameraError}
-                </p>
-
-                <p className="text-rose-400/80">
-                  Make sure your browser has camera permission
-                  and that you're using HTTPS or localhost.
-                </p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Quantity / Servings</label>
+                <input
+                  type="number"
+                  step="0.1"
+                  min="0.1"
+                  required
+                  value={servings}
+                  onChange={(e) => setServings(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Serving Unit</label>
+                <select
+                  value={servingUnit}
+                  onChange={(e) => setServingUnit(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500"
+                >
+                  <option value="serving">Serving(s)</option>
+                  <option value="grams">Grams (g)</option>
+                  <option value="oz">Ounces (oz)</option>
+                  <option value="cups">Cup(s)</option>
+                  <option value="pieces">Piece(s)</option>
+                </select>
               </div>
             </div>
-          ) : (
-            <div className="space-y-3">
-              <div
-                id="html5-qrcode-reader"
-                className="overflow-hidden rounded-xl border border-slate-800 bg-slate-950 text-white min-h-[260px]"
-              />
 
-              <div className="text-center space-y-1">
-                <p className="text-xs text-slate-300">
-                  Point your camera at the barcode
-                </p>
-
-                <p className="text-[11px] text-slate-500">
-                  UPC-A, UPC-E, EAN-13 and EAN-8 supported
-                </p>
-              </div>
+            <div className="flex gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setScannedBarcode(null)}
+                className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2 rounded-xl text-xs transition cursor-pointer"
+              >
+                Rescan
+              </button>
+              <button
+                type="submit"
+                className="flex-1 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold py-2 rounded-xl text-xs transition cursor-pointer shadow-md"
+              >
+                Log Nutrients
+              </button>
             </div>
-          )}
-        </div>
-
-        <div className="px-6 pb-5">
-          <button
-            type="button"
-            onClick={onClose}
-            className="w-full py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-sm font-medium transition"
-          >
-            Cancel
-          </button>
-        </div>
-
+          </form>
+        )}
       </div>
     </div>
   );
 }
-
