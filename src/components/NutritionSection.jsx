@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
   Utensils, 
   Plus, 
@@ -22,6 +22,11 @@ import {
   BookOpen
 } from 'lucide-react';
 
+import {
+  Html5QrcodeScanner,
+  Html5QrcodeSupportedFormats,
+  Html5QrcodeScanType
+} from 'html5-qrcode';
 // Comprehensive detailed recipe dictionary with expanded variety across categories
 const initialDetailedRecipes = {
   // Breakfasts
@@ -451,35 +456,135 @@ export default function NutritionSection({ profile = {} }) {
   };
 
   // Simulate scanning a barcode
-  const handleSimulateScan = () => {
-    const mockScannedItems = [
-      { name: 'Organic Almond Milk (1 cup)', calories: 60, protein: 1, carbs: 3, fat: 5, type: 'Snack' },
-      { name: 'Greek Honey Yogurt Cup', calories: 180, protein: 15, carbs: 22, fat: 3, type: 'Breakfast' },
-      { name: 'Whole Wheat Protein Wrap', calories: 240, protein: 14, carbs: 30, fat: 6, type: 'Lunch' },
-      { name: 'Grilled Chicken Breast Strips (4oz)', calories: 180, protein: 35, carbs: 0, fat: 4, type: 'Dinner' }
-    ];
-    const randomItem = mockScannedItems[Math.floor(Math.random() * mockScannedItems.length)];
-    setScanResult(randomItem);
-  };
-
+  const scannerRef = useRef(null);
+  const scannerInitializedRef = useRef(false);
+  
+  useEffect(() => {
+    if (!showScannerModal) {
+      if (scannerRef.current) {
+        scannerRef.current
+          .clear()
+          .catch(() => {});
+        scannerRef.current = null;
+      }
+  
+      scannerInitializedRef.current = false;
+      return;
+    }
+  
+    const timer = setTimeout(() => {
+      if (scannerInitializedRef.current) return;
+  
+      const reader = document.getElementById('html5-qrcode-reader');
+  
+      if (!reader) return;
+  
+      scannerInitializedRef.current = true;
+  
+      try {
+        const scanner = new Html5QrcodeScanner(
+          'html5-qrcode-reader',
+          {
+            fps: 10,
+  
+            qrbox: {
+              width: 280,
+              height: 160
+            },
+  
+            aspectRatio: 1.777778,
+  
+            formatsToSupport: [
+              Html5QrcodeSupportedFormats.UPC_A,
+              Html5QrcodeSupportedFormats.UPC_E,
+              Html5QrcodeSupportedFormats.EAN_13,
+              Html5QrcodeSupportedFormats.EAN_8
+            ],
+  
+            supportedScanTypes: [
+              Html5QrcodeScanType.SCAN_TYPE_CAMERA
+            ],
+  
+            rememberLastUsedCamera: true,
+  
+            showTorchButtonIfSupported: true
+          },
+          false
+        );
+  
+        scannerRef.current = scanner;
+  
+        scanner.render(
+          async (decodedText) => {
+            console.log('Barcode scanned:', decodedText);
+  
+            try {
+              await scanner.clear();
+            } catch (error) {
+              console.error('Scanner cleanup error:', error);
+            }
+  
+            scannerRef.current = null;
+            scannerInitializedRef.current = false;
+  
+            /*
+             * The barcode number is stored here.
+             * This is where the nutrition API can be connected.
+             */
+            setScanResult({
+              type: 'Barcode',
+              barcode: decodedText,
+              name: `Barcode: ${decodedText}`,
+              calories: 0,
+              protein: 0,
+              carbs: 0,
+              fat: 0
+            });
+          },
+          () => {
+            // Ignore normal frame-by-frame scan failures.
+          }
+        );
+      } catch (error) {
+        console.error('Barcode scanner error:', error);
+        scannerInitializedRef.current = false;
+      }
+    }, 150);
+  
+    return () => {
+      clearTimeout(timer);
+  
+      if (scannerRef.current) {
+        scannerRef.current
+          .clear()
+          .catch(() => {});
+  
+        scannerRef.current = null;
+      }
+  
+      scannerInitializedRef.current = false;
+    };
+  }, [showScannerModal]);
+  
   const handleAddScannedItem = () => {
     if (!scanResult) return;
+  
     setMeals((prev) => [
       ...prev,
       {
         id: Date.now().toString(),
-        type: scanResult.type,
+        type: scanResult.type || 'Snack',
         name: scanResult.name,
-        calories: scanResult.calories,
-        protein: scanResult.protein,
-        carbs: scanResult.carbs,
-        fat: scanResult.fat,
+        calories: Number(scanResult.calories) || 0,
+        protein: Number(scanResult.protein) || 0,
+        carbs: Number(scanResult.carbs) || 0,
+        fat: Number(scanResult.fat) || 0
       }
     ]);
+  
     setShowScannerModal(false);
     setScanResult(null);
   };
-
   return (
     <section className="space-y-6">
       {/* Header & Section Navigation Tabs */}
@@ -1016,58 +1121,105 @@ export default function NutritionSection({ profile = {} }) {
 
   {/* MODAL: BARCODE SCANNER */}
   {showScannerModal && (
-    <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-sm w-full p-6 space-y-4 text-center">
-        <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-          <h3 className="text-sm font-bold text-white flex items-center gap-1.5">
-            <ScanLine className="text-emerald-400 w-4 h-4" /> Barcode & Food Scanner
-          </h3>
-          <button onClick={() => { setShowScannerModal(false); setScanResult(null); }} className="text-slate-400 hover:text-white cursor-pointer">
-            <X className="w-4 h-4" />
-          </button>
-        </div>
+  <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-md w-full p-6 space-y-4">
 
-        {!scanResult ? (
-          <div className="space-y-4 py-4">
-            <div className="w-24 h-24 mx-auto rounded-2xl bg-slate-800 border border-slate-700 flex items-center justify-center text-emerald-400 animate-pulse">
-              <Camera className="w-10 h-10" />
-            </div>
-            <p className="text-xs text-slate-400">Position barcode or food item in front of camera simulation.</p>
-            <button
-              onClick={handleSimulateScan}
-              className="w-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold py-2.5 rounded-xl text-xs transition cursor-pointer shadow-md"
-            >
-              Simulate Scan
-            </button>
+      <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+        <h3 className="text-sm font-bold text-white flex items-center gap-1.5">
+          <ScanLine className="text-emerald-400 w-4 h-4" />
+          Barcode & Food Scanner
+        </h3>
+
+        <button
+          onClick={() => {
+            if (scannerRef.current) {
+              scannerRef.current
+                .clear()
+                .catch(() => {});
+              scannerRef.current = null;
+            }
+
+            scannerInitializedRef.current = false;
+            setShowScannerModal(false);
+            setScanResult(null);
+          }}
+          className="text-slate-400 hover:text-white cursor-pointer"
+        >
+          <X className="w-5 h-5" />
+        </button>
+      </div>
+
+      {!scanResult ? (
+        <div className="space-y-4">
+
+          <div
+            id="html5-qrcode-reader"
+            className="w-full overflow-hidden rounded-xl border border-slate-700 bg-slate-950 min-h-[300px]"
+          />
+
+          <div className="text-center">
+            <p className="text-xs text-slate-300">
+              Point your camera at the product barcode.
+            </p>
+
+            <p className="text-[10px] text-slate-500 mt-1">
+              Supported: UPC-A, UPC-E, EAN-13 and EAN-8
+            </p>
           </div>
-        ) : (
-          <div className="space-y-3 py-2 text-left">
-            <div className="bg-slate-800 p-3 rounded-xl border border-slate-700 space-y-1">
-              <span className="text-[10px] text-emerald-400 font-bold uppercase">{scanResult.type} Detected</span>
-              <h4 className="text-xs font-bold text-white">{scanResult.name}</h4>
-              <p className="text-[10px] text-slate-400">
+
+        </div>
+      ) : (
+        <div className="space-y-4">
+
+          <div className="bg-slate-800 p-4 rounded-xl border border-slate-700">
+
+            <span className="text-[10px] text-emerald-400 font-bold uppercase">
+              Barcode Detected
+            </span>
+
+            <h4 className="text-sm font-bold text-white mt-1">
+              {scanResult.name}
+            </h4>
+
+            <p className="text-xs text-slate-400 mt-2">
+              Barcode: {scanResult.barcode}
+            </p>
+
+            {scanResult.calories > 0 && (
+              <p className="text-xs text-slate-400 mt-2">
                 {scanResult.calories} kcal • P: {scanResult.protein}g • C: {scanResult.carbs}g • F: {scanResult.fat}g
               </p>
-            </div>
-            <div className="flex gap-2 pt-2">
-              <button
-                onClick={handleAddScannedItem}
-                className="flex-1 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold py-2.5 rounded-xl text-xs transition cursor-pointer shadow-md"
-              >
-                Add to Meal Log
-              </button>
-              <button
-                onClick={() => setScanResult(null)}
-                className="bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold px-4 py-2.5 rounded-xl text-xs transition cursor-pointer"
-              >
-                Scan Again
-              </button>
-            </div>
+            )}
+
           </div>
-        )}
-      </div>
+
+          <div className="flex gap-2">
+
+            <button
+              onClick={handleAddScannedItem}
+              className="flex-1 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold py-2.5 rounded-xl text-xs transition cursor-pointer shadow-md"
+            >
+              Add to Meal Log
+            </button>
+
+            <button
+              onClick={() => {
+                setScanResult(null);
+                scannerInitializedRef.current = false;
+              }}
+              className="bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold px-4 py-2.5 rounded-xl text-xs transition cursor-pointer"
+            >
+              Scan Again
+            </button>
+
+          </div>
+
+        </div>
+      )}
+
     </div>
-  )}
+  </div>
+)}
 
   {/* MODAL: CUSTOM RECIPE CREATOR */}
   {showCustomRecipeModal && (
