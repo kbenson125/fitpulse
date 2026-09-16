@@ -19,37 +19,41 @@ import {
 import BarcodeScannerModal from './BarcodeScannerModal';
 
 const initialDetailedRecipes = {
-  // BREAKFAST
-  'Overnight Oats with Chia Seeds & Berries': { category: 'breakfast', prep: '5 mins', cals: '380 kcal', protein: '24g', carbs: '52g', fat: '8g', ingredients: ['Rolled Oats', 'Chia Seeds', 'Almond Milk', 'Berries', 'Honey'], instructions: ['Combine oats, chia seeds, and almond milk in a jar.', 'Stir well, cover, and refrigerate overnight.', 'Top with berries and honey.'] },
-  'Greek Yogurt Parfait with Granola': { category: 'breakfast', prep: '5 mins', cals: '350 kcal', protein: '28g', carbs: '45g', fat: '6g', ingredients: ['Greek Yogurt', 'Granola', 'Berries', 'Honey'], instructions: ['Layer yogurt, granola, and berries in a glass.', 'Drizzle with honey before serving.'] },
-  'Scrambled Eggs on Whole Grain Toast': { category: 'breakfast', prep: '10 mins', cals: '400 kcal', protein: '24g', carbs: '30g', fat: '20g', ingredients: ['Eggs', 'Whole Grain Bread', 'Avocado', 'Butter'], instructions: ['Whisk and scramble eggs over medium-low heat.', 'Toast bread and top with smashed avocado and eggs.'] },
-  'Protein Smoothie with Spinach & Banana': { category: 'breakfast', prep: '5 mins', cals: '340 kcal', protein: '30g', carbs: '42g', fat: '5g', ingredients: ['Protein Powder', 'Banana', 'Spinach', 'Almond Milk', 'Flaxseed'], instructions: ['Add all ingredients to blender and blend until smooth.'] },
-  'Avocado & Egg White Breakfast Wrap': { category: 'breakfast', prep: '12 mins', cals: '390 kcal', protein: '26g', carbs: '38g', fat: '14g', ingredients: ['Egg Whites', 'Whole Wheat Tortilla', 'Avocado', 'Salsa', 'Spinach'], instructions: ['Scramble egg whites with spinach.', 'Warm tortilla, fill with egg whites, avocado, and salsa, then wrap tightly.'] },
-  'Peanut Butter Banana Oatmeal': { category: 'breakfast', prep: '8 mins', cals: '420 kcal', protein: '18g', carbs: '58g', fat: '14g', ingredients: ['Rolled Oats', 'Peanut Butter', 'Banana', 'Cinnamon', 'Milk'], instructions: ['Cook oats with milk.', 'Stir in peanut butter and top with sliced banana and cinnamon.'] },
-
-  // LUNCH
-  'Grilled Chicken Quinoa Bowl': { category: 'lunch', prep: '20 mins', cals: '550 kcal', protein: '45g', carbs: '40g', fat: '22g', ingredients: ['Chicken Breast', 'Quinoa', 'Avocado', 'Greens', 'Olive Oil'], instructions: ['Grill chicken and serve over a bed of quinoa and greens with sliced avocado.'] },
-  'Turkey Wrap with Avocado & Greens': { category: 'lunch', prep: '10 mins', cals: '450 kcal', protein: '35g', carbs: '42g', fat: '16g', ingredients: ['Tortilla', 'Deli Turkey', 'Avocado', 'Spinach', 'Tomato'], instructions: ['Spread avocado on tortilla, add sliced turkey, tomato, and spinach, then roll up.'] },
-  'Tuna Salad Stuffed Bell Peppers': { category: 'lunch', prep: '10 mins', cals: '360 kcal', protein: '38g', carbs: '18g', fat: '14g', ingredients: ['Tuna', 'Greek Yogurt', 'Celery', 'Bell Peppers', 'Dijon Mustard'], instructions: ['Mix tuna with Greek yogurt, celery, and mustard.', 'Spoon into halved bell peppers.'] },
-  'Mediterranean Chickpea Salad': { category: 'lunch', prep: '15 mins', cals: '410 kcal', protein: '16g', carbs: '50g', fat: '18g', ingredients: ['Chickpeas', 'Cucumbers', 'Cherry Tomatoes', 'Feta Cheese', 'Olive Oil', 'Lemon'], instructions: ['Combine chopped vegetables and chickpeas in a bowl.', 'Toss with olive oil, lemon juice, and top with feta.'] },
-  'Chicken Caesar Whole Wheat Wrap': { category: 'lunch', prep: '12 mins', cals: '480 kcal', protein: '40g', carbs: '36g', fat: '18g', ingredients: ['Chicken Breast', 'Romaine Lettuce', 'Light Caesar Dressing', 'Parmesan', 'Whole Wheat Wrap'], instructions: ['Slice grilled chicken.', 'Toss lettuce with dressing and parmesan, roll in wrap with chicken.'] },
-  'Southwest Black Bean & Corn Bowl': { category: 'lunch', prep: '15 mins', cals: '460 kcal', protein: '20g', carbs: '68g', fat: '12g', ingredients: ['Black Beans', 'Corn', 'Brown Rice', 'Salsa', 'Cilantro', 'Lime'], instructions: ['Warm black beans and corn.', 'Serve over brown rice with salsa, fresh cilantro, and lime squeeze.'] },
-
-  // DINNER
-  'Baked Salmon with Asparagus & Sweet Potato': { category: 'dinner', prep: '25 mins', cals: '520 kcal', protein: '42g', carbs: '35g', fat: '20g', ingredients: ['Salmon', 'Asparagus', 'Sweet Potato', 'Olive Oil', 'Garlic'], instructions: ['Bake salmon, sweet potato wedges, and asparagus at 400°F until tender and cooked.'] },
-  'Lean Beef Stir-Fry with Broccoli & Brown Rice': { category: 'dinner', prep: '20 mins', cals: '510 kcal', protein: '40g', carbs: '48g', fat: '15g', ingredients: ['Lean Beef', 'Broccoli', 'Brown Rice', 'Soy Sauce', 'Sesame Oil', 'Garlic'], instructions: ['Stir-fry beef strips and broccoli with soy sauce and garlic.', 'Serve over warm brown rice.'] },
-  'Turkey Meatballs with Zucchini Noodles': { category: 'dinner', prep: '25 mins', cals: '430 kcal', protein: '38g', carbs: '20g', fat: '22g', ingredients: ['Lean Ground Turkey', 'Zucchini Noodles', 'Marinara Sauce', 'Parmesan', 'Italian Seasoning'], instructions: ['Bake ground turkey meatballs.', 'Sauté zucchini noodles briefly and top with warm marinara and meatballs.'] },
-  'Grilled Shrimp & Cauliflower Rice Bowl': { category: 'dinner', prep: '18 mins', cals: '380 kcal', protein: '36g', carbs: '18g', fat: '16g', ingredients: ['Shrimp', 'Cauliflower Rice', 'Bell Peppers', 'Avocado Oil', 'Cilantro'], instructions: ['Sauté shrimp and bell peppers.', 'Serve over cooked cauliflower rice seasoned with herbs.'] },
-  'Baked Cod with Roasted Vegetables': { category: 'dinner', prep: '22 mins', cals: '390 kcal', protein: '35g', carbs: '24g', fat: '14g', ingredients: ['Cod Filet', 'Zucchini', 'Cherry Tomatoes', 'Olive Oil', 'Lemon', 'Herbs'], instructions: ['Arrange cod and chopped vegetables on a baking sheet.', 'Drizzle with olive oil and lemon juice, bake at 375°F.'] },
-  'Chicken Breast with Quinoa & Steamed Green Beans': { category: 'dinner', prep: '20 mins', cals: '470 kcal', protein: '44g', carbs: '42g', fat: '10g', ingredients: ['Chicken Breast', 'Quinoa', 'Green Beans', 'Lemon Pepper'], instructions: ['Season and pan-sear chicken breast.', 'Serve with fluffy quinoa and steamed green beans.'] },
-
-  // SNACK
-  'Apple & Almond Butter': { category: 'snack', prep: '2 mins', cals: '220 kcal', protein: '4g', carbs: '28g', fat: '10g', ingredients: ['Apple', 'Almond Butter'], instructions: ['Slice apple and serve with almond butter for dipping.'] },
-  'Protein Shake & Walnuts': { category: 'snack', prep: '3 mins', cals: '290 kcal', protein: '26g', carbs: '10g', fat: '16g', ingredients: ['Protein Powder', 'Walnuts', 'Water or Almond Milk'], instructions: ['Mix protein powder with liquid, pair with a handful of walnuts.'] },
-  'Cottage Cheese with Pineapple': { category: 'snack', prep: '2 mins', cals: '180 kcal', protein: '20g', carbs: '18g', fat: '3g', ingredients: ['Low-Fat Cottage Cheese', 'Pineapple Chunks'], instructions: ['Top cottage cheese with fresh or canned pineapple.'] },
-  'Edamame with Sea Salt': { category: 'snack', prep: '5 mins', cals: '160 kcal', protein: '14g', carbs: '12g', fat: '6g', ingredients: ['Steamed Edamame', 'Sea Salt'], instructions: ['Steam edamame pods and sprinkle generously with sea salt.'] },
-  'Hard-Boiled Eggs with Hummus': { category: 'snack', prep: '8 mins', cals: '210 kcal', protein: '14g', carbs: '8g', fat: '13g', ingredients: ['Hard-Boiled Eggs', 'Hummus', 'Paprika'], instructions: ['Halve hard-boiled eggs and serve with a side of hummus sprinkled with paprika.'] }
-};
+    // Dinners
+    'Baked Salmon with Asparagus & Sweet Potato': { category: 'dinner', prep: '25 mins', cals: '520 kcal', protein: '42g', carbs: '35g', fat: '20g', ingredients: ['Salmon', 'Asparagus', 'Sweet Potato'], instructions: ['Bake salmon, sweet potato wedges, and asparagus at 400°F until cooked through.'] },
+    'Lean Beef Stir-Fry with Broccoli & Brown Rice': { category: 'dinner', prep: '20 mins', cals: '510 kcal', protein: '40g', carbs: '48g', fat: '15g', ingredients: ['Lean Beef', 'Broccoli', 'Brown Rice', 'Soy Sauce'], instructions: ['Stir-fry beef strips and broccoli with soy sauce, serve over brown rice.'] },
+    'Grilled Shrimp Tacos with Cabbage Slaw': { category: 'dinner', prep: '15 mins', cals: '420 kcal', protein: '32g', carbs: '45g', fat: '12g', ingredients: ['Shrimp', 'Tortillas', 'Cabbage Slaw'], instructions: ['Cook seasoned shrimp and assemble in warm corn tortillas with fresh cabbage slaw.'] },
+    'Lemon Herb Chicken with Roasted Zucchini': { category: 'dinner', prep: '25 mins', cals: '440 kcal', protein: '46g', carbs: '15g', fat: '20g', ingredients: ['Chicken Breast', 'Zucchini', 'Lemon', 'Herbs'], instructions: ['Bake chicken breast and sliced zucchini coated with lemon juice and mixed herbs.'] },
+    'Lean Turkey Chili with Kidney Beans': { category: 'dinner', prep: '30 mins', cals: '490 kcal', protein: '44g', carbs: '50g', fat: '12g', ingredients: ['Ground Turkey', 'Kidney Beans', 'Diced Tomatoes', 'Chili Spices'], instructions: ['Brown turkey, add beans, tomatoes, and spices. Simmer for 25 minutes.'] },
+    'Baked Cod with Quinoa & Steamed Broccoli': { category: 'dinner', prep: '20 mins', cals: '390 kcal', protein: '38g', carbs: '35g', fat: '8g', ingredients: ['Cod Fillet', 'Quinoa', 'Broccoli'], instructions: ['Bake cod fillet with lemon and spices, serve alongside quinoa and steamed broccoli.'] },
+    'Pork Tenderloin with Roasted Brussels Sprouts': { category: 'dinner', prep: '30 mins', cals: '480 kcal', protein: '45g', carbs: '20g', fat: '24g', ingredients: ['Pork Tenderloin', 'Brussels Sprouts', 'Olive Oil'], instructions: ['Roast pork tenderloin and halved Brussels sprouts until tender and caramelized.'] },
+    'Beef & Mushroom Stuffed Bell Peppers': { category: 'dinner', prep: '40 mins', cals: '460 kcal', protein: '36g', carbs: '30g', fat: '22g', ingredients: ['Ground Beef', 'Mushrooms', 'Bell Peppers', 'Brown Rice', 'Mozzarella'], instructions: ['Mix cooked beef, mushrooms, and rice, stuff into peppers, top with cheese and bake.'] },
+    'Herbed Turkey Meatballs with Polenta': { category: 'dinner', prep: '35 mins', cals: '470 kcal', protein: '42g', carbs: '44g', fat: '14g', ingredients: ['Ground Turkey', 'Polenta', 'Parmesan', 'Herb Marinara'], instructions: ['Bake turkey meatballs and serve over creamy warm polenta with marinara.'] },
+    'Honey Garlic Chicken & Broccoli Bowls': { category: 'dinner', prep: '15 mins', cals: '450 kcal', protein: '40g', carbs: '48g', fat: '10g', ingredients: ['Chicken Breasts', 'Broccoli', 'Quinoa', 'Honey', 'Sriracha', 'Soy Sauce', 'Garlic'], instructions: ['Cook breaded diced chicken in a skillet, then coat with honey-garlic sauce.', 'Stir-fry broccoli and serve with quinoa and chicken.'] },
+    'Hearty Tuscan White Bean & Kale Soup': { category: 'dinner', prep: '15 mins', cals: '280 kcal', protein: '14g', carbs: '42g', fat: '5g', ingredients: ['Cannellini Beans', 'Lacinato Kale', 'Onion', 'Carrots', 'Celery', 'Garlic', 'Vegetable Broth'], instructions: ['Sauté aromatic vegetables, add broth and cannellini beans (partially mashed for thickness).', 'Simmer and stir in chopped kale until tender.'] },
+    'Baked Herb-Crusted Chicken Tenders': { category: 'dinner', prep: '15 mins', cals: '330 kcal', protein: '42g', carbs: '20g', fat: '8g', ingredients: ['Chicken Tenderloins', 'Whole Wheat Breadcrumbs', 'Greek Yogurt', 'Paprika', 'Garlic Powder'], instructions: ['Coat chicken tenders in Greek yogurt, then dredge in seasoned breadcrumbs.', 'Bake on a wire rack at 400°F until crispy.'] },
+    'Balsamic Glazed Chicken with Roasted Root Veggies': { category: 'dinner', prep: '30 mins', cals: '460 kcal', protein: '44g', carbs: '38g', fat: '12g', ingredients: ['Chicken Breast', 'Carrots', 'Parsnips', 'Balsamic Vinegar', 'Olive Oil'], instructions: ['Toss chopped carrots and parsnips in olive oil and roast at 400°F.', 'Sear chicken breasts and glaze with balsamic reduction near the end of cooking.'] },
+    'Ground Turkey & Green Bean Stir-Fry': { category: 'dinner', prep: '15 mins', cals: '390 kcal', protein: '38g', carbs: '22g', fat: '16g', ingredients: ['Ground Turkey', 'Fresh Green Beans', 'Garlic', 'Ginger', 'Coconut Aminos'], instructions: ['Brown ground turkey in a skillet, then add fresh green beans, minced garlic, and ginger.', 'Stir-fry with coconut aminos until tender-crisp.'] },
+    'Lentil & Sweet Potato Shepherd’s Pie': { category: 'dinner', prep: '40 mins', cals: '440 kcal', protein: '16g', carbs: '68g', fat: '10g', ingredients: ['Green Lentils', 'Mixed Veggies', 'Vegetable Broth', 'Mashed Sweet Potatoes'], instructions: ['Simmer lentils and mixed vegetables in broth to create a thick base layer.', 'Top with a layer of fluffy mashed sweet potatoes and bake until golden.'] },
+    'Pork Chop with Apples & Cabbage': { category: 'dinner', prep: '25 mins', cals: '480 kcal', protein: '42g', carbs: '30g', fat: '20g', ingredients: ['Pork Chops', 'Sliced Apples', 'Shredded Cabbage', 'Apple Cider Vinegar'], instructions: ['Sear pork chops until golden brown and cooked through, then set aside.', 'Sauté shredded cabbage and apples with a splash of apple cider vinegar until tender.'] },
+    'Black Bean & Quinoa Stuffed Poblano Peppers': { category: 'dinner', prep: '35 mins', cals: '380 kcal', protein: '15g', carbs: '60g', fat: '10g', ingredients: ['Poblano Peppers', 'Black Beans', 'Cooked Quinoa', 'Salsa', 'Cumin', 'Monterey Jack Cheese'], instructions: ['Mix black beans, quinoa, salsa, and cumin together.', 'Stuff into halved poblano peppers, top with a light layer of cheese, and bake at 375°F.'] },
+    'Authentic Chicken Tacos': { category: 'dinner', prep: '20 mins', cals: '420 kcal', protein: '38g', carbs: '40g', fat: '12g', ingredients: ['Chicken Breast', 'Corn Tortillas', 'Diced Onions', 'Cilantro', 'Lime', 'Taco Seasoning'], instructions: ['Season and grill chicken breast, then dice into bite-sized pieces.', 'Serve warm in corn tortillas and garnish generously with diced onions, fresh cilantro, and a squeeze of lime juice.'] },
+    'Juicy Beef Tacos': { category: 'dinner', prep: '20 mins', cals: '480 kcal', protein: '36g', carbs: '38g', fat: '20g', ingredients: ['Lean Ground Beef', 'Taco Seasoning', 'Hard or Soft Tortillas', 'Shredded Lettuce', 'Diced Tomatoes', 'Cheddar Cheese'], instructions: ['Brown ground beef in a skillet, drain excess fat, and stir in taco seasoning with a splash of water.', 'Spoon into tortillas and top with shredded lettuce, diced tomatoes, and cheddar cheese.'] },
+    'Classic Chicken Enchiladas': { category: 'dinner', prep: '35 mins', cals: '490 kcal', protein: '40g', carbs: '44g', fat: '18g', ingredients: ['Shredded Chicken Breast', 'Tortillas', 'Enchilada Sauce', 'Black Beans', 'Mexican Blend Cheese', 'Cilantro'], instructions: ['Mix shredded chicken with black beans and a portion of enchilada sauce.', 'Roll mixture into tortillas, place snugly in a baking dish, pour remaining sauce on top, cover with cheese, and bake at 375°F until bubbly.'] },
+    'Mongolian Beef and Noodles': { category: 'dinner', prep: '25 mins', cals: '520 kcal', protein: '42g', carbs: '54g', fat: '16g', ingredients: ['Flank Steak', 'Lo Mein Noodles or Ramen', 'Soy Sauce', 'Brown Sugar', 'Garlic', 'Ginger', 'Green Onions'], instructions: ['Slice flank steak thin, sear in a hot skillet, and set aside.', 'Whisk soy sauce, brown sugar, garlic, and ginger into a sauce and simmer with cooked noodles and beef until glossy, garnishing with green onions.'] },
+    'Crispy Chicken Caesar Wraps (Dinner)': { category: 'dinner', prep: '15 mins', cals: '460 kcal', protein: '44g', carbs: '38g', fat: '15g', ingredients: ['Chicken Breast or Tenders', 'Romaine Lettuce', 'Parmesan Cheese', 'Light Caesar Dressing', 'Large Tortillas'], instructions: ['Cook chicken until crispy or grilled, then slice into strips.', 'Toss chopped romaine lettuce with light Caesar dressing and parmesan cheese, add chicken, and wrap tightly in a large tortilla.'] },
+    'Savory Chicken Salad Wraps (Dinner)': { category: 'dinner', prep: '15 mins', cals: '410 kcal', protein: '40g', carbs: '34g', fat: '12g', ingredients: ['Shredded Chicken Breast', 'Greek Yogurt', 'Dijon Mustard', 'Celery', 'Grapes or Pecans', 'Whole-Wheat Wraps'], instructions: ['Combine shredded chicken, Greek yogurt, Dijon mustard, diced celery, and sliced grapes or pecans in a bowl.', 'Spoon mixture into whole-wheat wraps for a hearty dinner meal.'] },
+  
+    // Snacks
+    'Apple & Almond Butter': { category: 'snack', prep: '2 mins', cals: '220 kcal', protein: '4g', carbs: '28g', fat: '10g', ingredients: ['Apple', 'Almond Butter'], instructions: ['Slice apple and serve with a side of almond butter for dipping.'] },
+    'Protein Shake & Walnuts': { category: 'snack', prep: '3 mins', cals: '290 kcal', protein: '26g', carbs: '10g', fat: '16g', ingredients: ['Protein Powder', 'Walnuts'], instructions: ['Mix protein powder with water or milk, pair with a handful of walnuts.'] },
+    'Carrot Sticks & Hummus': { category: 'snack', prep: '2 mins', cals: '180 kcal', protein: '5g', carbs: '20g', fat: '9g', ingredients: ['Carrots', 'Hummus'], instructions: ['Serve fresh carrot sticks with seasoned hummus.'] },
+    'Rice Cakes with Peanut Butter': { category: 'snack', prep: '2 mins', cals: '210 kcal', protein: '6g', carbs: '24g', fat: '10g', ingredients: ['Rice Cakes', 'Peanut Butter'], instructions: ['Spread peanut butter evenly across crispy rice cakes.'] },
+    'Edamame with Sea Salt': { category: 'snack', prep: '5 mins', cals: '160 kcal', protein: '17g', carbs: '15g', fat: '6g', ingredients: ['Edamame Pods', 'Sea Salt'], instructions: ['Steam edamame pods until tender and sprinkle with sea salt.'] },
+    'Greek Yogurt with Chia & Honey': { category: 'snack', prep: '3 mins', cals: '200 kcal', protein: '18g', carbs: '22g', fat: '3g', ingredients: ['Greek Yogurt', 'Chia Seeds', 'Honey'], instructions: ['Mix chia seeds and honey into Greek yogurt.'] },
+    'Mixed Berries & Pumpkin Seeds': { category: 'snack', prep: '2 mins', cals: '170 kcal', protein: '6g', carbs: '20g', fat: '8g', ingredients: ['Mixed Berries', 'Pumpkin Seeds'], instructions: ['Combine fresh berries with raw pumpkin seeds for a crunchy antioxidant snack.'] },
+    'Healthy Buffalo Chicken Dip': { category: 'snack', prep: '15 mins', cals: '240 kcal', protein: '22g', carbs: '6g', fat: '14g', ingredients: ['Shredded Chicken Breast', 'Light Cream Cheese', 'Greek Yogurt', 'Buffalo Hot Sauce', 'Cheddar Cheese', 'Celery Sticks'], instructions: ['Mix shredded chicken, softened light cream cheese, Greek yogurt, and buffalo hot sauce in a baking dish.', 'Top with a sprinkle of cheddar cheese, bake at 375°F until warm and melted, and serve with celery sticks.'] },
+  };
 
 const generateVariedWeeklyPlan = (recipes, exclusions) => {
   const isMatchExcluded = (name, data) => {
@@ -83,10 +87,10 @@ const generateVariedWeeklyPlan = (recipes, exclusions) => {
   
   return days.map((day, idx) => ({
     day,
-    b: breakfasts[idx % breakfasts.length] || breakfasts[0] || 'Custom Meal',
-    l: lunches[idx % lunches.length] || lunches[0] || 'Custom Meal',
-    d: dinners[idx % dinners.length] || dinners[0] || 'Custom Meal',
-    snacks: snacks[idx % snacks.length] || snacks[0] || 'Custom Meal'
+    b: breakfasts.length > 0 ? breakfasts[idx % breakfasts.length] : 'Custom Meal',
+    l: lunches.length > 0 ? lunches[idx % lunches.length] : 'Custom Meal',
+    d: dinners.length > 0 ? dinners[idx % dinners.length] : 'Custom Meal',
+    snacks: snacks.length > 0 ? snacks[idx % snacks.length] : 'Custom Meal'
   }));
 };
 
@@ -170,7 +174,7 @@ export default function NutritionSection({ profile = {} }) {
     setNewMeal({ type: 'Snack', name: '', calories: '', protein: '', carbs: '', fat: '' });
   };
 
-  const handleScanSuccess = ({ barcode, servings, unit }) => {
+  const handleScanSuccess = ({ barcode, name, servings, unit }) => {
     const baseCals = 200;
     const baseProtein = 10;
     const baseCarbs = 24;
@@ -179,18 +183,18 @@ export default function NutritionSection({ profile = {} }) {
     const multiplier = Number(servings) || 1;
 
     setMeals((prev) => [
-      ...prev,
-      {
-        id: Date.now().toString(),
-        type: 'Snack',
-        name: `Scanned Item (${servings} ${unit})`,
-        calories: Math.round(baseCals * multiplier),
-        protein: Math.round(baseProtein * multiplier),
-        carbs: Math.round(baseCarbs * multiplier),
-        fat: Math.round(baseFat * multiplier)
-      }
-    ]);
-  };
+        ...prev,
+        {
+          id: Date.now().toString(),
+          type: 'Snack',
+          name: name ? `${name} (${servings} ${unit})` : `Scanned Item (${servings} ${unit})`,
+          calories: Math.round(baseCals * multiplier),
+          protein: Math.round(baseProtein * multiplier),
+          carbs: Math.round(baseCarbs * multiplier),
+          fat: Math.round(baseFat * multiplier)
+        }
+      ]);
+    };
 
   const handleDeleteMeal = (id) => {
     setMeals((prev) => prev.filter((m) => m.id !== id));

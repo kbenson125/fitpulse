@@ -1,10 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Html5QrcodeScanner } from 'html5-qrcode';
-import { X, Camera, Scale } from 'lucide-react';
+import { X, Camera, Scale, Tag } from 'lucide-react';
 
 export default function BarcodeScannerModal({ isOpen, onClose, onScanSuccess }) {
   const scannerRef = useRef(null);
   const [scannedBarcode, setScannedBarcode] = useState(null);
+  const [customName, setCustomName] = useState('');
   const [servings, setServings] = useState(1);
   const [servingUnit, setServingUnit] = useState('serving');
 
@@ -29,6 +30,8 @@ export default function BarcodeScannerModal({ isOpen, onClose, onScanSuccess }) 
           scanner.clear().catch((err) => console.error('Failed to clear scanner:', err));
           scannerRef.current = null;
           setScannedBarcode(decodedText);
+          // Set a default name fallback using the barcode value
+          setCustomName(`Item (${decodedText})`);
         },
         () => {}
       );
@@ -49,6 +52,7 @@ export default function BarcodeScannerModal({ isOpen, onClose, onScanSuccess }) 
 
     onScanSuccess({
       barcode: scannedBarcode,
+      name: customName || `Item (${scannedBarcode})`,
       servings: Number(servings) || 1,
       unit: servingUnit
     });
@@ -58,6 +62,7 @@ export default function BarcodeScannerModal({ isOpen, onClose, onScanSuccess }) 
 
   const handleClose = () => {
     setScannedBarcode(null);
+    setCustomName('');
     setServings(1);
     setServingUnit('serving');
     onClose();
@@ -71,7 +76,7 @@ export default function BarcodeScannerModal({ isOpen, onClose, onScanSuccess }) 
         <div className="flex justify-between items-center border-b border-slate-800 pb-3">
           <h3 className="text-sm font-bold text-white flex items-center gap-2">
             {scannedBarcode ? <Scale className="text-emerald-400 w-4 h-4" /> : <Camera className="text-emerald-400 w-4 h-4" />}
-            {scannedBarcode ? 'Confirm Portion Size' : 'Scan Food Barcode'}
+            {scannedBarcode ? 'Confirm Item Details' : 'Scan Food Barcode'}
           </h3>
           <button onClick={handleClose} className="text-slate-400 hover:text-white transition cursor-pointer">
             <X className="w-5 h-5" />
@@ -85,9 +90,26 @@ export default function BarcodeScannerModal({ isOpen, onClose, onScanSuccess }) 
           </div>
         ) : (
           <form onSubmit={handleConfirmQuantity} className="space-y-4">
-            <div className="bg-slate-800 p-3 rounded-xl border border-slate-700">
-              <span className="text-[10px] uppercase font-bold text-slate-400">Barcode Detected</span>
-              <p className="text-sm font-bold text-emerald-400 font-mono mt-0.5">{scannedBarcode}</p>
+            <div className="bg-slate-800 p-3 rounded-xl border border-slate-700 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] uppercase font-bold text-slate-400">Barcode Detected</span>
+                <span className="text-xs font-bold text-emerald-400 font-mono">{scannedBarcode}</span>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1 flex items-center gap-1">
+                  <Tag className="w-3 h-3 text-emerald-400" />
+                  Item Name / Label
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={customName}
+                  onChange={(e) => setCustomName(e.target.value)}
+                  placeholder="e.g., Greek Yogurt, Oats, Protein Bar"
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500"
+                />
+              </div>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
