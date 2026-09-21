@@ -36,9 +36,17 @@ export default function ProgressTracker({ profile = {}, setProfile }) {
     profile.targetDate || new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
   );
 
-  // Load weight logs strictly from profile/storage, defaulting to an EMPTY array (no hardcoded mock entries)
+  // Load weight logs strictly from profile/storage, defaulting to an EMPTY array
   const [weightLogs, setWeightLogs] = useState(() => {
     return profile.weightHistory || [];
+  });
+
+  // Fixed baseline weight anchor for steady weekly goals (locked to the first entry or initial profile weight)
+  const [baselineWeight, setBaselineWeight] = useState(() => {
+    if (profile.weightHistory && profile.weightHistory.length > 0) {
+      return profile.weightHistory[0].weight;
+    }
+    return profile.currentWeight || profile.startingWeight || 180;
   });
 
   // Sync log changes back to profile
@@ -56,16 +64,11 @@ export default function ProgressTracker({ profile = {}, setProfile }) {
     }
   };
 
-  // Determine actual start weight and current weight dynamically
-  const startWeight = useMemo(() => {
-    if (weightLogs.length > 0) return weightLogs[0].weight;
-    return profile.currentWeight || profile.startingWeight || 0;
-  }, [weightLogs, profile]);
-
+  // Determine actual current weight dynamically from latest log
   const currentWeight = useMemo(() => {
     if (weightLogs.length > 0) return weightLogs[weightLogs.length - 1].weight;
-    return profile.currentWeight || startWeight;
-  }, [weightLogs, profile, startWeight]);
+    return profile.currentWeight || baselineWeight;
+  }, [weightLogs, profile, baselineWeight]);
 
   // Add New Weight Entry
   const handleAddWeight = (e) => {
@@ -78,6 +81,12 @@ export default function ProgressTracker({ profile = {}, setProfile }) {
     };
 
     const updated = [...weightLogs, newLog].sort((a, b) => new Date(a.date) - new Date(b.date));
+    
+    // If this is the very first log, update the baseline anchor
+    if (weightLogs.length === 0) {
+      setBaselineWeight(parseFloat(newWeight));
+    }
+
     updateLogs(updated);
     setNewWeight('');
   };
@@ -88,10 +97,10 @@ export default function ProgressTracker({ profile = {}, setProfile }) {
   };
 
   // -------------------------------------------------------------
-  // Milestone & Overall Progress Logic
+  // Milestone & Overall Progress Logic (Locked to Baseline)
   // -------------------------------------------------------------
   const milestoneAnalysis = useMemo(() => {
-    if (!currentWeight || !targetWeight) {
+    if (!baselineWeight || !targetWeight) {
       return {
         totalWeeks: 0,
         totalWeightToChange: 0,
@@ -111,8 +120,8 @@ export default function ProgressTracker({ profile = {}, setProfile }) {
     const totalDays = Math.max(1, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
     const totalWeeks = Math.max(1, Math.round(totalDays / 7));
 
-    const totalWeightToChange = startWeight ? startWeight - targetWeight : 0; 
-    const weightChangeSoFar = startWeight ? startWeight - currentWeight : 0; 
+    const totalWeightToChange = baselineWeight - targetWeight; 
+    const weightChangeSoFar = baselineWeight - currentWeight; 
     const totalRemaining = currentWeight - targetWeight;
 
     let progressPercent = 0;
@@ -120,7 +129,9 @@ export default function ProgressTracker({ profile = {}, setProfile }) {
       progressPercent = Math.min(100, Math.max(0, Math.round((weightChangeSoFar / totalWeightToChange) * 100)));
     }
 
-    const lbsPerWeek = Math.round((totalRemaining / totalWeeks) * 10) / 10;
+    // Steady weekly drop rate based on fixed baseline to goal target over total weeks
+    const totalPoundsToLose = baselineWeight - targetWeight;
+    const lbsPerWeek = Math.round((totalPoundsToLose / totalWeeks) * 10) / 10;
     const isSafePace = lbsPerWeek <= 2.0 && lbsPerWeek >= -2.0;
 
     const checkpoints = [];
@@ -128,7 +139,8 @@ export default function ProgressTracker({ profile = {}, setProfile }) {
       const milestoneDate = new Date();
       milestoneDate.setDate(today.getDate() + i * 7);
 
-      const targetForWeek = Math.round((currentWeight - (lbsPerWeek * i)) * 10) / 10;
+      // Fixed step-down from baseline weight each week
+      const targetForWeek = Math.round((baselineWeight - (lbsPerWeek * i)) * 10) / 10;
       
       checkpoints.push({
         weekNum: i,
@@ -150,7 +162,7 @@ export default function ProgressTracker({ profile = {}, setProfile }) {
       isSafePace,
       checkpoints
     };
-  }, [startWeight, currentWeight, targetWeight, targetDate]);
+  }, [baselineWeight, currentWeight, targetWeight, targetDate]);
 
   return (
     <section className="space-y-6">
@@ -161,15 +173,15 @@ export default function ProgressTracker({ profile = {}, setProfile }) {
             <h2 className="text-xl font-bold text-white flex items-center gap-2">
               <TrendingDown className="text-emerald-400 w-5 h-5" /> Weight & Goal Progress Tracker
             </h2>
-            <p className="text-xs text-slate-400">Log your weight entries to generate customized weekly milestones.</p>
+            <p className="text-xs text-slate-400">Log your weight entries against your fixed weekly milestone plan.</p>
           </div>
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-center">
           <div className="bg-slate-900 p-3 rounded-xl border border-slate-700/60">
-            <span className="text-xs text-slate-400 block">Starting Weight</span>
+            <span className="text-xs text-slate-400 block">Baseline Start</span>
             <span className="text-lg font-bold text-slate-300">
-              {startWeight ? `${startWeight} lbs` : 'Not Set'}
+              {baselineWeight ? `${baselineWeight} lbs` : 'Not Set'}
             </span>
           </div>
           <div className="bg-slate-900 p-3 rounded-xl border border-slate-700/60">
@@ -213,7 +225,7 @@ export default function ProgressTracker({ profile = {}, setProfile }) {
           </div>
 
           <div className="flex justify-between text-xs text-slate-400 font-medium px-1">
-            <span>Start: {startWeight ? `${startWeight} lbs` : '--'}</span>
+            <span>Baseline: {baselineWeight ? `${baselineWeight} lbs` : '--'}</span>
             <span className="text-amber-400 font-bold">
               {milestoneAnalysis.totalRemaining > 0 
                 ? `${milestoneAnalysis.totalRemaining} lbs remaining` 
@@ -390,7 +402,7 @@ export default function ProgressTracker({ profile = {}, setProfile }) {
             </h3>
             <p className="text-xs text-slate-400">
               {milestoneAnalysis.checkpoints.length > 0 
-                ? `Break down your ${milestoneAnalysis.totalWeeks}-week journey into manageable weekly milestones.`
+                ? `Your steady roadmap from baseline to goal over ${milestoneAnalysis.totalWeeks} weeks.`
                 : 'Enter your target date and weight to calculate your weekly checkpoints.'}
             </p>
           </div>
@@ -438,9 +450,9 @@ export default function ProgressTracker({ profile = {}, setProfile }) {
                   </div>
 
                   <div className="text-[11px] text-slate-400 border-t border-slate-800 pt-2 flex justify-between">
-                    <span>Delta from start:</span>
+                    <span>Drop from baseline:</span>
                     <span className="font-semibold text-slate-200">
-                      -{startWeight ? (startWeight - checkpoint.suggestedWeight).toFixed(1) : 0} lbs
+                      -{baselineWeight ? (baselineWeight - checkpoint.suggestedWeight).toFixed(1) : 0} lbs
                     </span>
                   </div>
                 </div>

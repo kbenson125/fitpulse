@@ -21,7 +21,7 @@ export default function App() {
       targetWeight: 165,
       targetDate: '',
       goal: 'weight_loss',
-      dislikedFoods: ['Seafood', 'Shellfish'],
+      isAtHome: false,
       daysPerWeek: 4
     };
   });
@@ -48,12 +48,14 @@ export default function App() {
 
   // Handle modal form changes
   const handleProfileChange = (e) => {
-    const { name, value } = e.target;
+    const { name, value, type, checked } = e.target;
     setProfile(prev => ({
       ...prev,
-      [name]: name === 'age' || name === 'startWeight' || name === 'currentWeight' || name === 'targetWeight'
-        ? parseFloat(value) || ''
-        : value
+      [name]: type === 'checkbox' 
+        ? checked 
+        : (name === 'age' || name === 'startWeight' || name === 'currentWeight' || name === 'targetWeight'
+            ? parseFloat(value) || ''
+            : value)
     }));
   };
 
@@ -142,6 +144,22 @@ export default function App() {
                 </div>
               </div>
 
+              {/* Fitness Goal */}
+              <div>
+                <label className="text-xs font-semibold text-slate-300 block mb-1">Primary Fitness Goal</label>
+                <select
+                  name="goal"
+                  value={profile.goal || 'weight_loss'}
+                  onChange={handleProfileChange}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-xs text-white focus:outline-none focus:border-emerald-500"
+                >
+                  <option value="weight_loss">Weight Loss</option>
+                  <option value="muscle_gain">Muscle Gain</option>
+                  <option value="maintenance">Maintenance</option>
+                  <option value="endurance">Endurance & Conditioning</option>
+                </select>
+              </div>
+
               {/* Target Weight */}
               <div>
                 <label className="text-xs font-semibold text-slate-300 block mb-1">Target Weight (lbs)</label>
@@ -154,6 +172,24 @@ export default function App() {
                 />
               </div>
 
+              {/* At-Home Mode Toggle */}
+              <div className="flex items-center justify-between bg-slate-950 border border-slate-800 rounded-lg p-3">
+                <div>
+                  <span className="text-xs font-semibold text-slate-300 block">At-Home Workout Mode</span>
+                  <span className="text-[10px] text-slate-500">Adapt routines for bodyweight or minimal equipment</span>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    name="isAtHome"
+                    checked={!!profile.isAtHome}
+                    onChange={handleProfileChange}
+                    className="sr-only peer"
+                  />
+                  <div className="w-9 h-5 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500"></div>
+                </label>
+              </div>
+
               {/* Workout Frequency Selector */}
               <div className="space-y-1.5 pt-1">
                 <label className="text-xs font-semibold text-slate-300 block">
@@ -164,7 +200,7 @@ export default function App() {
                     <button
                       key={num}
                       type="button"
-                      onClick={() => setProfile(prev => ({ ...prev, daysPerWeek: num }))}
+                      onClick={() => setProfile(prev => ({ ...prev, daysPerWord: num, daysPerWeek: num }))}
                       className={`py-2 rounded-lg text-xs font-bold border transition cursor-pointer ${
                         profile.daysPerWeek === num
                           ? 'bg-emerald-500 text-slate-950 border-emerald-400'

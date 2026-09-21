@@ -14,7 +14,9 @@ import {
   Sparkles,
   ChevronRight,
   Home,
-  Footprints
+  Footprints,
+  Plus,
+  Trash2
 } from 'lucide-react';
 
 export default function WorkoutSection({ profile = {}, setProfile }) {
@@ -26,21 +28,24 @@ export default function WorkoutSection({ profile = {}, setProfile }) {
   const [swappedExercises, setSwappedExercises] = useState(() => profile?.swappedExercises || {});
   const [swapTarget, setSwapTarget] = useState(null);
   const [cardioLogs, setCardioLogs] = useState(() => profile?.cardioLogs || {});
+  
+  // Updated cardio input and multi-session state supporting an array of cardio logs per day
   const [cardioInput, setCardioInput] = useState({ type: 'Running', duration: '', distance: '', steps: '' });
+  
   const [mobilityLogs, setMobilityLogs] = useState(() => profile?.mobilityLogs || {});
   const [customExercises, setCustomExercises] = useState(() => profile?.customExercises || {});
   const [newExName, setNewExName] = useState('');
 
-  // At-Home Equipment & Fitness Goal States
-  const [isHomeMode, setIsHomeMode] = useState(() => profile?.isHomeMode || false);
-  const [availableEquipment, setAvailableEquipment] = useState(() => profile?.availableEquipment || {
+  // Read At-Home Equipment & Fitness Goal States directly from profile properties
+  const isHomeMode = profile?.isHomeMode || false;
+  const availableEquipment = profile?.availableEquipment || {
     dumbbells: true,
     resistanceBands: true,
     pullUpBar: false,
     barbell: false,
     bench: false
-  });
-  const [selectedGoal, setSelectedGoal] = useState(() => profile?.goal || 'weight_loss');
+  };
+  const selectedGoal = profile?.goal || 'weight_loss';
 
   // Active Workout & Rest Timer States
   const [workoutTimerRunning, setWorkoutTimerRunning] = useState(false);
@@ -96,26 +101,24 @@ export default function WorkoutSection({ profile = {}, setProfile }) {
     const nextMobility = updates.mobilityLogs !== undefined ? updates.mobilityLogs : mobilityLogs;
     const nextSwapped = updates.swappedExercises !== undefined ? updates.swappedExercises : swappedExercises;
     const nextCustom = updates.customExercises !== undefined ? updates.customExercises : customExercises;
-    const nextHomeMode = updates.isHomeMode !== undefined ? updates.isHomeMode : isHomeMode;
-    const nextEquipment = updates.availableEquipment !== undefined ? updates.availableEquipment : availableEquipment;
-    const nextGoal = updates.goal !== undefined ? updates.goal : selectedGoal;
 
     setCompletedExercises(nextCompleted);
     setCardioLogs(nextCardio);
     setMobilityLogs(nextMobility);
     setSwappedExercises(nextSwapped);
     setCustomExercises(nextCustom);
-    setIsHomeMode(nextHomeMode);
-    setAvailableEquipment(nextEquipment);
-    setSelectedGoal(nextGoal);
 
     if (setProfile) {
       const completedCount = Object.values(nextCompleted).filter(Boolean).length;
       let calories = completedCount * 35;
       
-      Object.values(nextCardio).forEach((log) => {
-        const rate = log.type === 'Running' ? 11 : log.type === 'Cycling' ? 9 : 7;
-        calories += (log.duration || 30) * rate;
+      // Calculate active calories from multiple cardio sessions per day
+      Object.values(nextCardio).forEach((dayData) => {
+        const sessions = dayData?.sessions || [];
+        sessions.forEach((log) => {
+          const rate = log.type === 'Running' ? 11 : log.type === 'Cycling' ? 9 : 7;
+          calories += (log.duration || 30) * rate;
+        });
       });
 
       setProfile({
@@ -125,17 +128,9 @@ export default function WorkoutSection({ profile = {}, setProfile }) {
         mobilityLogs: nextMobility,
         swappedExercises: nextSwapped,
         customExercises: nextCustom,
-        isHomeMode: nextHomeMode,
-        availableEquipment: nextEquipment,
-        goal: nextGoal,
         totalActiveCalories: calories
       });
     }
-  };
-
-  const toggleEquipmentItem = (key) => {
-    const updated = { ...availableEquipment, [key]: !availableEquipment[key] };
-    updateWorkoutState({ availableEquipment: updated });
   };
 
   // Calculate dynamic daily cardio recommendation based on profile goals
@@ -564,33 +559,56 @@ export default function WorkoutSection({ profile = {}, setProfile }) {
     setSwapTarget(null);
   };
 
-  const handleSaveCardio = (e) => {
+  // Handlers for multiple cardio sessions per day
+  const handleAddCardioSession = (e) => {
     e.preventDefault();
     if (!cardioInput.duration && !cardioInput.distance) return;
-    const updatedCardio = {
-      ...cardioLogs,
-      [selectedDay]: {
-        type: cardioInput.type,
-        duration: parseFloat(cardioInput.duration) || 0,
-        distance: parseFloat(cardioInput.distance) || 0,
-      }
+
+    const currentDayData = cardioLogs[selectedDay] || { sessions: [], steps: 0 };
+    const newSession = {
+      id: `cardio_${Date.now()}`,
+      type: cardioInput.type,
+      duration: parseFloat(cardioInput.duration) || 0,
+      distance: parseFloat(cardioInput.distance) || 0,
     };
-    updateWorkoutState({ cardioLogs: updatedCardio });
+
+    const updatedDayData = {
+      ...currentDayData,
+      sessions: [...(currentDayData.sessions || []), newSession]
+    };
+
+    const updatedCardioLogs = {
+      ...cardioLogs,
+      [selectedDay]: updatedDayData
+    };
+
+    updateWorkoutState({ cardioLogs: updatedCardioLogs });
     setCardioInput({ type: 'Running', duration: '', distance: '', steps: cardioInput.steps });
   };
 
-  const handleRemoveCardio = () => {
-    const copy = { ...cardioLogs };
-    delete copy[selectedDay];
-    updateWorkoutState({ cardioLogs: copy });
+  const handleRemoveCardioSession = (sessionId) => {
+    const currentDayData = cardioLogs[selectedDay];
+    if (!currentDayData) return;
+
+    const updatedSessions = (currentDayData.sessions || []).filter(s => s.id !== sessionId);
+    const updatedCardioLogs = {
+      ...cardioLogs,
+      [selectedDay]: {
+        ...currentDayData,
+        sessions: updatedSessions
+      }
+    };
+
+    updateWorkoutState({ cardioLogs: updatedCardioLogs });
   };
 
   const handleSaveSteps = (e) => {
     e.preventDefault();
+    const currentDayData = cardioLogs[selectedDay] || { sessions: [], steps: 0 };
     const updatedCardio = {
       ...cardioLogs,
       [selectedDay]: {
-        ...(cardioLogs[selectedDay] || { type: 'Running', duration: 0, distance: 0 }),
+        ...currentDayData,
         steps: parseInt(cardioInput.steps, 10) || 0,
       }
     };
@@ -617,20 +635,16 @@ export default function WorkoutSection({ profile = {}, setProfile }) {
     });
   }, [rawExercises, isHomeMode, availableEquipment]);
 
-  const currentCardio = cardioLogs[selectedDay];
-  const loggedSteps = currentCardio?.steps || 0;
+  const currentCardioData = cardioLogs[selectedDay] || { sessions: [], steps: 0 };
+  const loggedSteps = currentCardioData.steps || 0;
   const stepProgressPercent = Math.min(Math.round((loggedSteps / cardioTarget.steps) * 100), 100);
 
   const completedWorkoutCount = Object.values(completedExercises).filter(Boolean).length;
-  const totalCardioLogged = Object.keys(cardioLogs).length;
+  const totalCardioLogged = Object.values(cardioLogs).reduce((acc, curr) => acc + (curr.sessions?.length || 0), 0);
   const currentStreak = Math.min(completedWorkoutCount + totalCardioLogged, 7);
 
   const totalStepsWeekly = useMemo(() => {
     return Object.values(cardioLogs).reduce((acc, curr) => acc + (curr.steps || 0), 0);
-  }, [cardioLogs]);
-
-  const totalMilesWeekly = useMemo(() => {
-    return Object.values(cardioLogs).reduce((acc, curr) => acc + (curr.distance || 0), 0).toFixed(1);
   }, [cardioLogs]);
 
   return (
@@ -642,7 +656,7 @@ export default function WorkoutSection({ profile = {}, setProfile }) {
             <Dumbbell className="text-emerald-400 w-5 h-5" /> Workout & Cardio Hub
           </h2>
           <p className="text-xs text-slate-400 mt-1">
-            Tailor your routines to your goals and equipment availability.
+            Complete your daily routines, log multiple cardio sessions, and track rest intervals.
           </p>
         </div>
 
@@ -705,92 +719,6 @@ export default function WorkoutSection({ profile = {}, setProfile }) {
           >
             <FileText className="w-4 h-4" /> Weekly Summary
           </button>
-        </div>
-      </div>
-
-      {/* Fitness Goals & At-Home Mode Configuration Panel */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Fitness Goal Selector */}
-        <div className="bg-slate-800 p-5 rounded-2xl border border-slate-700 space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-white flex items-center gap-2">
-              <Target className="w-4 h-4 text-emerald-400" /> Primary Fitness Goal
-            </span>
-            <span className="text-[10px] text-slate-400">Tailors reps & cardio</span>
-          </div>
-
-          <div className="grid grid-cols-3 gap-2">
-            {[
-              { id: 'weight_loss', label: 'Weight Loss' },
-              { id: 'muscle_gain', label: 'Muscle Gain' },
-              { id: 'endurance', label: 'Endurance' }
-            ].map((goal) => (
-              <button
-                key={goal.id}
-                onClick={() => updateWorkoutState({ goal: goal.id })}
-                className={`py-2 px-3 rounded-xl text-xs font-bold border transition cursor-pointer text-center ${
-                  selectedGoal === goal.id
-                    ? 'bg-emerald-950 border-emerald-500 text-emerald-400 shadow-sm'
-                    : 'bg-slate-900 border-slate-700/80 text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                {goal.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* At-Home Mode & Equipment Selector */}
-        <div className="bg-slate-800 p-5 rounded-2xl border border-slate-700 space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Home className="w-4 h-4 text-emerald-400" />
-              <span className="text-xs font-bold text-white">At-Home Workout Mode</span>
-            </div>
-            <button
-              onClick={() => updateWorkoutState({ isHomeMode: !isHomeMode })}
-              className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer border ${
-                isHomeMode 
-                  ? 'bg-emerald-500 text-slate-950 border-emerald-400' 
-                  : 'bg-slate-900 text-slate-400 border-slate-700'
-              }`}
-            >
-              {isHomeMode ? 'Enabled' : 'Disabled'}
-            </button>
-          </div>
-
-          {isHomeMode ? (
-            <div className="space-y-2 pt-1">
-              <span className="text-[10px] font-semibold text-slate-400 block uppercase">Select Available Equipment:</span>
-              <div className="flex flex-wrap gap-2">
-                {[
-                  { key: 'dumbbells', label: 'Dumbbells' },
-                  { key: 'resistanceBands', label: 'Resistance Bands' },
-                  { key: 'pullUpBar', label: 'Pull-up Bar' },
-                  { key: 'barbell', label: 'Barbell / Rack' }
-                ].map((item) => {
-                  const active = availableEquipment[item.key];
-                  return (
-                    <button
-                      key={item.key}
-                      onClick={() => toggleEquipmentItem(item.key)}
-                      className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition cursor-pointer ${
-                        active 
-                          ? 'bg-slate-900 border-emerald-500/60 text-emerald-400' 
-                          : 'bg-slate-950 border-slate-800 text-slate-500'
-                      }`}
-                    >
-                      {active ? '✓ ' : '+ '}{item.label}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          ) : (
-            <p className="text-[11px] text-slate-400 pt-1">
-              Enable At-Home Mode to automatically substitute gym equipment with bodyweight or home alternatives.
-            </p>
-          )}
         </div>
       </div>
 
@@ -986,7 +914,7 @@ export default function WorkoutSection({ profile = {}, setProfile }) {
           </div>
         )}
 
-        {/* Daily Steps Input & Original Cardio Section */}
+        {/* Daily Steps Input & Multi-Session Cardio Section */}
         <div className="border-t border-slate-700/80 pt-5 space-y-4">
           {/* Daily Total Steps Tracker */}
           <div className="bg-slate-900 border border-slate-700/80 p-4 rounded-xl space-y-3">
@@ -1031,87 +959,102 @@ export default function WorkoutSection({ profile = {}, setProfile }) {
             </form>
           </div>
 
-          {/* Original Cardio Log Section */}
+          {/* Multi-Session Cardio & Endurance Section */}
           <div className="space-y-3">
             <div className="flex justify-between items-center">
-              <span className="text-xs font-bold text-slate-300 uppercase tracking-wider">Cardio & Endurance Session</span>
-              {currentCardio && (
-                <button
-                  onClick={handleRemoveCardio}
-                  className="text-[11px] text-red-400 hover:underline cursor-pointer"
-                >
-                  Clear Cardio Log
-                </button>
-              )}
+              <span className="text-xs font-bold text-slate-300 uppercase tracking-wider">Cardio & Endurance Sessions</span>
+              <span className="text-[10px] text-slate-400">Log as many individual sessions as you complete</span>
             </div>
 
-            {currentCardio && currentCardio.duration ? (
-              <div className="bg-slate-900 border border-emerald-500/30 p-4 rounded-xl flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-emerald-950 border border-emerald-800 flex items-center justify-center text-emerald-400">
-                    <Flame className="w-4 h-4" />
+            {/* List of Logged Cardio Sessions for this Day */}
+            {currentCardioData.sessions && currentCardioData.sessions.length > 0 && (
+              <div className="space-y-2">
+                {currentCardioData.sessions.map((session) => (
+                  <div key={session.id} className="bg-slate-900 border border-emerald-500/30 p-3.5 rounded-xl flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-emerald-950 border border-emerald-800 flex items-center justify-center text-emerald-400">
+                        <Flame className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <span className="text-xs font-bold text-white block">{session.type} Session</span>
+                        <span className="text-[10px] text-slate-400">
+                          {session.duration} mins {session.distance > 0 ? `· ${session.distance} miles` : ''}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs bg-emerald-950 text-emerald-400 font-bold px-2.5 py-1 rounded-lg border border-emerald-800">
+                        Logged ✓
+                      </span>
+                      <button
+                        onClick={() => handleRemoveCardioSession(session.id)}
+                        className="p-1.5 text-slate-400 hover:text-red-400 rounded-lg hover:bg-slate-800 transition cursor-pointer"
+                        title="Remove Session"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
-                  <div>
-                    <span className="text-xs font-bold text-white block">{currentCardio.type} Session Logged</span>
-                    <span className="text-[10px] text-slate-400">
-                      {currentCardio.duration} mins {currentCardio.distance > 0 ? `· ${currentCardio.distance} miles` : ''}
-                    </span>
-                  </div>
-                </div>
-                <span className="text-xs bg-emerald-950 text-emerald-400 font-bold px-2.5 py-1 rounded-lg border border-emerald-800">
-                  Logged ✓
-                </span>
+                ))}
               </div>
-            ) : (
-              <form onSubmit={handleSaveCardio} className="bg-slate-900 border border-slate-700/80 p-4 rounded-xl space-y-3">
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div>
-                    <label className="text-[10px] font-semibold text-slate-400 block mb-1">Cardio Type</label>
-                    <select
-                      value={cardioInput.type}
-                      onChange={(e) => setCardioInput({ ...cardioInput, type: e.target.value })}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-emerald-500"
-                    >
-                      <option value="Running">Running</option>
-                      <option value="Walking">Walking</option>
-                      <option value="Cycling">Cycling</option>
-                      <option value="Rowing">Rowing</option>
-                      <option value="Elliptical">Elliptical</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-semibold text-slate-400 block mb-1">Duration (Mins)</label>
-                    <input
-                      type="number"
-                      placeholder="e.g. 30"
-                      value={cardioInput.duration}
-                      onChange={(e) => setCardioInput({ ...cardioInput, duration: e.target.value })}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-emerald-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-semibold text-slate-400 block mb-1">Distance (Miles)</label>
-                    <input
-                      type="number"
-                      step="0.1"
-                      placeholder="e.g. 2.5"
-                      value={cardioInput.distance}
-                      onChange={(e) => setCardioInput({ ...cardioInput, distance: e.target.value })}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-emerald-500"
-                    />
-                  </div>
-                </div>
-
-                <div className="flex justify-end pt-1">
-                  <button
-                    type="submit"
-                    className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold px-4 py-2 rounded-lg text-xs transition cursor-pointer"
-                  >
-                    Log Cardio Session
-                  </button>
-                </div>
-              </form>
             )}
+
+            {/* Form to Add New Cardio Session */}
+            <form onSubmit={handleAddCardioSession} className="bg-slate-900 border border-slate-700/80 p-4 rounded-xl space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                  <Plus className="w-4 h-4 text-emerald-400" /> Log Cardio Session
+                </span>
+                <span className="text-[10px] text-slate-400">Add morning run, evening walk, cycling, etc.</span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="text-[10px] font-semibold text-slate-400 block mb-1">Cardio Type</label>
+                  <select
+                    value={cardioInput.type}
+                    onChange={(e) => setCardioInput({ ...cardioInput, type: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-emerald-500"
+                  >
+                    <option value="Running">Running</option>
+                    <option value="Walking">Walking</option>
+                    <option value="Cycling">Cycling</option>
+                    <option value="Rowing">Rowing</option>
+                    <option value="Elliptical">Elliptical</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[10px] font-semibold text-slate-400 block mb-1">Duration (Mins)</label>
+                  <input
+                    type="number"
+                    placeholder="e.g. 30"
+                    value={cardioInput.duration}
+                    onChange={(e) => setCardioInput({ ...cardioInput, duration: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-emerald-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-semibold text-slate-400 block mb-1">Distance (Miles)</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    placeholder="e.g. 2.5"
+                    value={cardioInput.distance}
+                    onChange={(e) => setCardioInput({ ...cardioInput, distance: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-emerald-500"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end pt-1">
+                <button
+                  type="submit"
+                  className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold px-4 py-2 rounded-lg text-xs transition cursor-pointer flex items-center gap-1.5"
+                >
+                  <Plus className="w-3.5 h-3.5" /> Add Session to Day {selectedDay}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       </div>
