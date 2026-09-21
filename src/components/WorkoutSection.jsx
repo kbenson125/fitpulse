@@ -1,11 +1,10 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Dumbbell, 
   Clock, 
   CheckCircle2, 
   RefreshCw,
   X,
-  Footprints,
   Flame,
   Target,
   Trophy,
@@ -13,7 +12,9 @@ import {
   HeartPulse,
   FileText,
   Sparkles,
-  ChevronRight
+  ChevronRight,
+  Home,
+  Footprints
 } from 'lucide-react';
 
 export default function WorkoutSection({ profile = {}, setProfile }) {
@@ -25,11 +26,68 @@ export default function WorkoutSection({ profile = {}, setProfile }) {
   const [swappedExercises, setSwappedExercises] = useState(() => profile?.swappedExercises || {});
   const [swapTarget, setSwapTarget] = useState(null);
   const [cardioLogs, setCardioLogs] = useState(() => profile?.cardioLogs || {});
-  const [cardioInput, setCardioInput] = useState({ type: 'Running', duration: '', distance: '' });
+  const [cardioInput, setCardioInput] = useState({ type: 'Running', duration: '', distance: '', steps: '' });
   const [mobilityLogs, setMobilityLogs] = useState(() => profile?.mobilityLogs || {});
+  const [customExercises, setCustomExercises] = useState(() => profile?.customExercises || {});
+  const [newExName, setNewExName] = useState('');
+
+  // At-Home Equipment & Fitness Goal States
+  const [isHomeMode, setIsHomeMode] = useState(() => profile?.isHomeMode || false);
+  const [availableEquipment, setAvailableEquipment] = useState(() => profile?.availableEquipment || {
+    dumbbells: true,
+    resistanceBands: true,
+    pullUpBar: false,
+    barbell: false,
+    bench: false
+  });
+  const [selectedGoal, setSelectedGoal] = useState(() => profile?.goal || 'weight_loss');
+
+  // Active Workout & Rest Timer States
+  const [workoutTimerRunning, setWorkoutTimerRunning] = useState(false);
+  const [workoutSeconds, setWorkoutSeconds] = useState(0);
+  const [restTimerSeconds, setRestTimerSeconds] = useState(0);
+  const [restTimerRunning, setRestTimerRunning] = useState(false);
 
   // Weekly Summary Modal state
   const [showSummaryModal, setShowSummaryModal] = useState(false);
+
+  // Workout Session Stopwatch Effect
+  useEffect(() => {
+    let interval = null;
+    if (workoutTimerRunning) {
+      interval = setInterval(() => {
+        setWorkoutSeconds((prev) => prev + 1);
+      }, 1000);
+    } else {
+      clearInterval(interval);
+    }
+    return () => clearInterval(interval);
+  }, [workoutTimerRunning]);
+
+  // Rest Period Countdown Effect
+  useEffect(() => {
+    let interval = null;
+    if (restTimerRunning && restTimerSeconds > 0) {
+      interval = setInterval(() => {
+        setRestTimerSeconds((prev) => {
+          if (prev <= 1) {
+            setRestTimerRunning(false);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    } else {
+      clearInterval(interval);
+    }
+    return () => clearInterval(interval);
+  }, [restTimerRunning, restTimerSeconds]);
+
+  const formatTime = (totalSecs) => {
+    const mins = Math.floor(totalSecs / 60);
+    const secs = totalSecs % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
 
   // Helper to sync state changes back to profile
   const updateWorkoutState = (updates) => {
@@ -37,11 +95,19 @@ export default function WorkoutSection({ profile = {}, setProfile }) {
     const nextCardio = updates.cardioLogs !== undefined ? updates.cardioLogs : cardioLogs;
     const nextMobility = updates.mobilityLogs !== undefined ? updates.mobilityLogs : mobilityLogs;
     const nextSwapped = updates.swappedExercises !== undefined ? updates.swappedExercises : swappedExercises;
+    const nextCustom = updates.customExercises !== undefined ? updates.customExercises : customExercises;
+    const nextHomeMode = updates.isHomeMode !== undefined ? updates.isHomeMode : isHomeMode;
+    const nextEquipment = updates.availableEquipment !== undefined ? updates.availableEquipment : availableEquipment;
+    const nextGoal = updates.goal !== undefined ? updates.goal : selectedGoal;
 
     setCompletedExercises(nextCompleted);
     setCardioLogs(nextCardio);
     setMobilityLogs(nextMobility);
     setSwappedExercises(nextSwapped);
+    setCustomExercises(nextCustom);
+    setIsHomeMode(nextHomeMode);
+    setAvailableEquipment(nextEquipment);
+    setSelectedGoal(nextGoal);
 
     if (setProfile) {
       const completedCount = Object.values(nextCompleted).filter(Boolean).length;
@@ -58,28 +124,34 @@ export default function WorkoutSection({ profile = {}, setProfile }) {
         cardioLogs: nextCardio,
         mobilityLogs: nextMobility,
         swappedExercises: nextSwapped,
+        customExercises: nextCustom,
+        isHomeMode: nextHomeMode,
+        availableEquipment: nextEquipment,
+        goal: nextGoal,
         totalActiveCalories: calories
       });
     }
   };
 
+  const toggleEquipmentItem = (key) => {
+    const updated = { ...availableEquipment, [key]: !availableEquipment[key] };
+    updateWorkoutState({ availableEquipment: updated });
+  };
+
   // Calculate dynamic daily cardio recommendation based on profile goals
   const cardioTarget = useMemo(() => {
-    const current = profile?.currentWeight || 180;
-    const target = profile?.targetWeight || 165;
-    const goal = profile?.goal || 'weight_loss';
-
     let recommendedMiles = 2.0; 
-    if (goal === 'weight_loss' && current > target) {
-      const diff = current - target;
-      recommendedMiles = diff > 20 ? 3.5 : 2.5;
-    } else if (goal === 'muscle_gain') {
+    if (selectedGoal === 'weight_loss') {
+      recommendedMiles = 3.0;
+    } else if (selectedGoal === 'muscle_gain') {
       recommendedMiles = 1.5;
+    } else if (selectedGoal === 'endurance') {
+      recommendedMiles = 4.0;
     }
 
     const estimatedSteps = Math.round(recommendedMiles * 2200);
     return { miles: recommendedMiles, steps: estimatedSteps };
-  }, [profile]);
+  }, [selectedGoal]);
 
   // Dynamic workout templates based on user's saved profile preference
   const workoutTemplates = useMemo(() => {
@@ -158,51 +230,311 @@ export default function WorkoutSection({ profile = {}, setProfile }) {
     }
   }, [daysPerWeek]);
 
-  // Exercise Database categorized by workout focus area
-  const exerciseDatabase = {
-    'Upper Body': [
-      { id: 'u1', name: 'Barbell Bench Press', sets: 4, reps: '8-10', rest: '90s', alternatives: [{ name: 'Dumbbell Bench Press', sets: 4, reps: '8-10', rest: '90s' }, { name: 'Push-ups', sets: 4, reps: '12-15', rest: '60s' }] },
-      { id: 'u2', name: 'Bent-Over Barbell Row', sets: 4, reps: '8-10', rest: '90s', alternatives: [{ name: 'Single-Arm Dumbbell Row', sets: 4, reps: '10 per arm', rest: '60s' }, { name: 'Seated Cable Row', sets: 4, reps: '10-12', rest: '60s' }] },
-      { id: 'u3', name: 'Standing Overhead Dumbbell Press', sets: 3, reps: '10-12', rest: '60s', alternatives: [{ name: 'Seated Barbell Military Press', sets: 3, reps: '8-10', rest: '90s' }] },
-      { id: 'u4', name: 'Lat Pulldowns', sets: 3, reps: '10-12', rest: '60s', alternatives: [{ name: 'Pull-ups or Chin-ups', sets: 3, reps: 'Max Reps', rest: '90s' }] },
-      { id: 'u5', name: 'Incline Dumbbell Curl / Tricep Pushdowns', sets: 3, reps: '12-15', rest: '45s', alternatives: [{ name: 'EZ Bar Bicep Curls', sets: 3, reps: '12-15', rest: '45s' }] },
-    ],
-    'Lower Body': [
-      { id: 'l1', name: 'Barbell Back Squat', sets: 4, reps: '8-10', rest: '120s', alternatives: [{ name: 'Goblet Squat', sets: 4, reps: '10-12', rest: '90s' }, { name: 'Leg Press Machine', sets: 4, reps: '10-12', rest: '90s' }] },
-      { id: 'l2', name: 'Romanian Deadlift (RDL)', sets: 3, reps: '10-12', rest: '90s', alternatives: [{ name: 'Dumbbell Deadlifts', sets: 3, reps: '10-12', rest: '90s' }] },
-      { id: 'l3', name: 'Walking Dumbbell Lunges', sets: 3, reps: '12 per leg', rest: '60s', alternatives: [{ name: 'Reverse Lunges', sets: 3, reps: '10 per leg', rest: '60s' }] },
-      { id: 'l4', name: 'Seated Leg Curls', sets: 3, reps: '12-15', rest: '60s', alternatives: [{ name: 'Lying Hamstring Curls', sets: 3, reps: '12-15', rest: '60s' }] },
-      { id: 'l5', name: 'Hanging Leg Raises', sets: 3, reps: '15', rest: '45s', alternatives: [{ name: 'Cable Crunches', sets: 3, reps: '12-15', rest: '45s' }] },
-    ],
-    'Push': [
-      { id: 'p1', name: 'Incline Dumbbell Bench Press', sets: 4, reps: '8-10', rest: '90s', alternatives: [{ name: 'Incline Barbell Press', sets: 4, reps: '8-10', rest: '90s' }] },
-      { id: 'p2', name: 'Seated Overhead Dumbbell Press', sets: 3, reps: '10-12', rest: '60s', alternatives: [{ name: 'Machine Shoulder Press', sets: 3, reps: '10-12', rest: '60s' }] },
-      { id: 'p3', name: 'Cable Chest Flyes', sets: 3, reps: '12-15', rest: '60s', alternatives: [{ name: 'Dumbbell Floor Flyes', sets: 3, reps: '12-15', rest: '60s' }] },
-      { id: 'p4', name: 'Dumbbell Lateral Raises', sets: 4, reps: '12-15', rest: '45s', alternatives: [{ name: 'Cable Lateral Raises', sets: 4, reps: '12-15', rest: '45s' }] },
-      { id: 'p5', name: 'Tricep Rope Pushdowns', sets: 3, reps: '12-15', rest: '45s', alternatives: [{ name: 'Overhead Tricep Extension', sets: 3, reps: '12-15', rest: '45s' }] },
-    ],
-    'Pull': [
-      { id: 'pull1', name: 'Conventional Deadlift', sets: 3, reps: '6-8', rest: '120s', alternatives: [{ name: 'Trap Bar Deadlift', sets: 3, reps: '6-8', rest: '120s' }] },
-      { id: 'pull2', name: 'Wide-Grip Lat Pulldown', sets: 4, reps: '8-10', rest: '90s', alternatives: [{ name: 'Neutral-Grip Pulldowns', sets: 4, reps: '8-10', rest: '90s' }] },
-      { id: 'pull3', name: 'Seated Cable Row', sets: 3, reps: '10-12', rest: '60s', alternatives: [{ name: 'Chest-Supported Row', sets: 3, reps: '10-12', rest: '60s' }] },
-      { id: 'pull4', name: 'Face Pulls', sets: 4, reps: '15', rest: '45s', alternatives: [{ name: 'Band Pull-Aparts', sets: 4, reps: '15-20', rest: '30s' }] },
-      { id: 'pull5', name: 'Incline Dumbbell Bicep Curls', sets: 3, reps: '12', rest: '45s', alternatives: [{ name: 'Hammer Curls', sets: 3, reps: '12', rest: '45s' }] },
-    ],
-    'Legs': [
-      { id: 'leg1', name: 'Leg Press', sets: 4, reps: '10-12', rest: '90s', alternatives: [{ name: 'Barbell Back Squat', sets: 4, reps: '8-10', rest: '120s' }] },
-      { id: 'leg2', name: 'Bulgarian Split Squats', sets: 3, reps: '10 per leg', rest: '90s', alternatives: [{ name: 'Walking Lunges', sets: 3, reps: '12 per leg', rest: '60s' }] },
-      { id: 'leg3', name: 'Leg Extensions', sets: 3, reps: '12-15', rest: '60s', alternatives: [{ name: 'Sissy Squats', sets: 3, reps: '10-12', rest: '60s' }] },
-      { id: 'leg4', name: 'Lying Hamstring Curls', sets: 3, reps: '12-15', rest: '60s', alternatives: [{ name: 'Seated Curls', sets: 3, reps: '12-15', rest: '60s' }] },
-      { id: 'leg5', name: 'Standing Calf Raises', sets: 4, reps: '15', rest: '45s', alternatives: [{ name: 'Seated Calf Raises', sets: 4, reps: '15-20', rest: '45s' }] },
-    ],
-    'Full Body': [
-      { id: 'fb1', name: 'Goblet Squats', sets: 4, reps: '10-12', rest: '90s', alternatives: [{ name: 'Bodyweight Air Squats', sets: 4, reps: '15-20', rest: '60s' }] },
-      { id: 'fb2', name: 'Dumbbell Flat Bench Press', sets: 3, reps: '10-12', rest: '60s', alternatives: [{ name: 'Push-ups', sets: 3, reps: '12-15', rest: '60s' }] },
-      { id: 'fb3', name: 'Single-Arm Dumbbell Row', sets: 3, reps: '10 per side', rest: '60s', alternatives: [{ name: 'Resistance Band Rows', sets: 3, reps: '15', rest: '45s' }] },
-      { id: 'fb4', name: 'Dumbbell Shoulder Press', sets: 3, reps: '12', rest: '60s', alternatives: [{ name: 'Pike Push-ups', sets: 3, reps: '10', rest: '60s' }] },
-      { id: 'fb5', name: 'Plank Hold', sets: 3, reps: '45-60 sec', rest: '45s', alternatives: [{ name: 'Dead Bugs', sets: 3, reps: '12 total', rest: '45s' }] }
-    ]
-  };
+  // Comprehensive Exercise Database with Goal-Specific Rep Schemes
+  const exerciseDatabase = useMemo(() => {
+    const isMuscleGain = selectedGoal === 'muscle_gain';
+    const isEndurance = selectedGoal === 'endurance';
+
+    const repScheme = isMuscleGain ? '6-8' : isEndurance ? '15-20' : '10-12';
+    const compoundRepScheme = isMuscleGain ? '6-8' : isEndurance ? '12-15' : '8-10';
+
+    return {
+      'Upper Body': [
+        { 
+          id: 'u1', 
+          name: 'Barbell Bench Press', 
+          requiredEquipment: 'barbell', 
+          sets: 4, 
+          reps: compoundRepScheme, 
+          rest: '90s', 
+          alternatives: [
+            { name: 'Dumbbell Bench Press', sets: 4, reps: compoundRepScheme, rest: '90s' }, 
+            { name: 'Push-ups', sets: 4, reps: '12-15', rest: '60s' }
+          ] 
+        },
+        { 
+          id: 'u2', 
+          name: 'Bent-Over Barbell Row', 
+          requiredEquipment: 'barbell', 
+          sets: 4, 
+          reps: compoundRepScheme, 
+          rest: '90s', 
+          alternatives: [
+            { name: 'Single-Arm Dumbbell Row', sets: 4, reps: repScheme, rest: '60s' }, 
+            { name: 'Resistance Band Rows', sets: 4, reps: '15', rest: '45s' }
+          ] 
+        },
+        { 
+          id: 'u3', 
+          name: 'Standing Overhead Dumbbell Press', 
+          requiredEquipment: 'dumbbells', 
+          sets: 3, 
+          reps: repScheme, 
+          rest: '60s', 
+          alternatives: [{ name: 'Pike Push-ups', sets: 3, reps: '10', rest: '60s' }] 
+        },
+        { 
+          id: 'u4', 
+          name: 'Pull-ups or Chin-ups', 
+          requiredEquipment: 'pullUpBar', 
+          sets: 3, 
+          reps: 'Max Reps', 
+          rest: '90s', 
+          alternatives: [{ name: 'Resistance Band Pulldowns', sets: 3, reps: '15', rest: '60s' }] 
+        },
+        { 
+          id: 'u5', 
+          name: 'Incline Dumbbell Curl / Tricep Pushdowns', 
+          requiredEquipment: 'dumbbells', 
+          sets: 3, 
+          reps: repScheme, 
+          rest: '45s', 
+          alternatives: [{ name: 'Bodyweight Dips', sets: 3, reps: '10-12', rest: '45s' }] 
+        },
+      ],
+      'Lower Body': [
+        { 
+          id: 'l1', 
+          name: 'Barbell Back Squat', 
+          requiredEquipment: 'barbell', 
+          sets: 4, 
+          reps: compoundRepScheme, 
+          rest: '120s', 
+          alternatives: [
+            { name: 'Goblet Squat (Dumbbell)', sets: 4, reps: repScheme, rest: '90s' }, 
+            { name: 'Bodyweight Air Squats', sets: 4, reps: '20', rest: '60s' }
+          ] 
+        },
+        { 
+          id: 'l2', 
+          name: 'Romanian Deadlift (RDL)', 
+          requiredEquipment: 'barbell', 
+          sets: 3, 
+          reps: repScheme, 
+          rest: '90s', 
+          alternatives: [
+            { name: 'Dumbbell RDLs', sets: 3, reps: repScheme, rest: '90s' }, 
+            { name: 'Resistance Band Good Mornings', sets: 3, reps: '15', rest: '60s' }
+          ] 
+        },
+        { 
+          id: 'l3', 
+          name: 'Walking Dumbbell Lunges', 
+          requiredEquipment: 'dumbbells', 
+          sets: 3, 
+          reps: '12 per leg', 
+          rest: '60s', 
+          alternatives: [{ name: 'Bodyweight Reverse Lunges', sets: 3, reps: '15 per leg', rest: '60s' }] 
+        },
+        { 
+          id: 'l4', 
+          name: 'Dumbbell Bulgarian Split Squats', 
+          requiredEquipment: 'dumbbells', 
+          sets: 3, 
+          reps: repScheme, 
+          rest: '90s', 
+          alternatives: [{ name: 'Bodyweight Split Squats', sets: 3, reps: '15 per leg', rest: '60s' }] 
+        },
+        { 
+          id: 'l5', 
+          name: 'Hanging Leg Raises', 
+          requiredEquipment: 'pullUpBar', 
+          sets: 3, 
+          reps: '15', 
+          rest: '45s', 
+          alternatives: [{ name: 'Floor Lying Leg Raises', sets: 3, reps: '15', rest: '45s' }] 
+        },
+      ],
+      'Push': [
+        { 
+          id: 'p1', 
+          name: 'Incline Dumbbell Bench Press', 
+          requiredEquipment: 'dumbbells', 
+          sets: 4, 
+          reps: compoundRepScheme, 
+          rest: '90s', 
+          alternatives: [{ name: 'Decline Push-ups', sets: 4, reps: '12-15', rest: '60s' }] 
+        },
+        { 
+          id: 'p2', 
+          name: 'Seated Overhead Dumbbell Press', 
+          requiredEquipment: 'dumbbells', 
+          sets: 3, 
+          reps: repScheme, 
+          rest: '60s', 
+          alternatives: [{ name: 'Pike Push-ups', sets: 3, reps: '10', rest: '60s' }] 
+        },
+        { 
+          id: 'p3', 
+          name: 'Dumbbell Floor Flyes', 
+          requiredEquipment: 'dumbbells', 
+          sets: 3, 
+          reps: repScheme, 
+          rest: '60s', 
+          alternatives: [{ name: 'Standard Push-ups', sets: 3, reps: '15', rest: '60s' }] 
+        },
+        { 
+          id: 'p4', 
+          name: 'Dumbbell Lateral Raises', 
+          requiredEquipment: 'dumbbells', 
+          sets: 4, 
+          reps: repScheme, 
+          rest: '45s', 
+          alternatives: [{ name: 'Resistance Band Lateral Raises', sets: 4, reps: '15-20', rest: '30s' }] 
+        },
+        { 
+          id: 'p5', 
+          name: 'Overhead Dumbbell Tricep Extension', 
+          requiredEquipment: 'dumbbells', 
+          sets: 3, 
+          reps: repScheme, 
+          rest: '45s', 
+          alternatives: [{ name: 'Diamond Push-ups', sets: 3, reps: '10-12', rest: '45s' }] 
+        },
+      ],
+      'Pull': [
+        { 
+          id: 'pull1', 
+          name: 'Pull-ups', 
+          requiredEquipment: 'pullUpBar', 
+          sets: 3, 
+          reps: 'Max Reps', 
+          rest: '120s', 
+          alternatives: [{ name: 'Doorframe Resistance Band Rows', sets: 3, reps: '15', rest: '60s' }] 
+        },
+        { 
+          id: 'pull2', 
+          name: 'Single-Arm Dumbbell Row', 
+          requiredEquipment: 'dumbbells', 
+          sets: 4, 
+          reps: compoundRepScheme, 
+          rest: '90s', 
+          alternatives: [{ name: 'Resistance Band Pulldowns', sets: 4, reps: '15', rest: '60s' }] 
+        },
+        { 
+          id: 'pull3', 
+          name: 'Chest-Supported Dumbbell Row', 
+          requiredEquipment: 'dumbbells', 
+          sets: 3, 
+          reps: repScheme, 
+          rest: '60s', 
+          alternatives: [{ name: 'Inverted Bodyweight Rows', sets: 3, reps: '12', rest: '60s' }] 
+        },
+        { 
+          id: 'pull4', 
+          name: 'Resistance Band Face Pulls', 
+          requiredEquipment: 'resistanceBands', 
+          sets: 4, 
+          reps: '15', 
+          rest: '45s', 
+          alternatives: [{ name: 'Prone Y-Raises', sets: 4, reps: '15', rest: '30s' }] 
+        },
+        { 
+          id: 'pull5', 
+          name: 'Dumbbell Hammer Curls', 
+          requiredEquipment: 'dumbbells', 
+          sets: 3, 
+          reps: repScheme, 
+          rest: '45s', 
+          alternatives: [{ name: 'Resistance Band Bicep Curls', sets: 3, reps: '15', rest: '45s' }] 
+        },
+      ],
+      'Legs': [
+        { 
+          id: 'leg1', 
+          name: 'Goblet Squats', 
+          requiredEquipment: 'dumbbells', 
+          sets: 4, 
+          reps: repScheme, 
+          rest: '90s', 
+          alternatives: [{ name: 'Bodyweight Jump Squats', sets: 4, reps: '15', rest: '60s' }] 
+        },
+        { 
+          id: 'leg2', 
+          name: 'Bulgarian Split Squats', 
+          requiredEquipment: 'dumbbells', 
+          sets: 3, 
+          reps: repScheme, 
+          rest: '90s', 
+          alternatives: [{ name: 'Bodyweight Lunges', sets: 3, reps: '15 per leg', rest: '60s' }] 
+        },
+        { 
+          id: 'leg3', 
+          name: 'Dumbbell Romanian Deadlifts', 
+          requiredEquipment: 'dumbbells', 
+          sets: 3, 
+          reps: repScheme, 
+          rest: '60s', 
+          alternatives: [{ name: 'Single-Leg Bodyweight RDLs', sets: 3, reps: '12 per leg', rest: '60s' }] 
+        },
+        { 
+          id: 'leg4', 
+          name: 'Resistance Band Hamstring Curls', 
+          requiredEquipment: 'resistanceBands', 
+          sets: 3, 
+          reps: '15', 
+          rest: '60s', 
+          alternatives: [{ name: 'Glute Bridges', sets: 3, reps: '20', rest: '45s' }] 
+        },
+        { 
+          id: 'leg5', 
+          name: 'Standing Calf Raises', 
+          requiredEquipment: 'none', 
+          sets: 4, 
+          reps: '20', 
+          rest: '45s', 
+          alternatives: [{ name: 'Single-Leg Calf Raises', sets: 4, reps: '15', rest: '30s' }] 
+        },
+      ],
+      'Full Body': [
+        { 
+          id: 'fb1', 
+          name: 'Goblet Squats', 
+          requiredEquipment: 'dumbbells', 
+          sets: 4, 
+          reps: repScheme, 
+          rest: '90s', 
+          alternatives: [{ name: 'Bodyweight Air Squats', sets: 4, reps: '20', rest: '60s' }] 
+        },
+        { 
+          id: 'fb2', 
+          name: 'Dumbbell Flat Bench Press', 
+          requiredEquipment: 'dumbbells', 
+          sets: 3, 
+          reps: repScheme, 
+          rest: '60s', 
+          alternatives: [{ name: 'Push-ups', sets: 3, reps: '15', rest: '60s' }] 
+        },
+        { 
+          id: 'fb3', 
+          name: 'Single-Arm Dumbbell Row', 
+          requiredEquipment: 'dumbbells', 
+          sets: 3, 
+          reps: repScheme, 
+          rest: '60s', 
+          alternatives: [{ name: 'Resistance Band Rows', sets: 3, reps: '15', rest: '45s' }] 
+        },
+        { 
+          id: 'fb4', 
+          name: 'Dumbbell Shoulder Press', 
+          requiredEquipment: 'dumbbells', 
+          sets: 3, 
+          reps: repScheme, 
+          rest: '60s', 
+          alternatives: [{ name: 'Pike Push-ups', sets: 3, reps: '10', rest: '60s' }] 
+        },
+        { 
+          id: 'fb5', 
+          name: 'Plank Hold', 
+          requiredEquipment: 'none', 
+          sets: 3, 
+          reps: '45-60 sec', 
+          rest: '45s', 
+          alternatives: [{ name: 'Dead Bugs', sets: 3, reps: '12 total', rest: '45s' }] 
+        }
+      ]
+    };
+  }, [selectedGoal]);
 
   const restDayChecklist = [
     { id: 'm1', title: '5-Min Full Body Foam Rolling (Calves, IT Bands, Lats)' },
@@ -234,7 +566,7 @@ export default function WorkoutSection({ profile = {}, setProfile }) {
 
   const handleSaveCardio = (e) => {
     e.preventDefault();
-    if (!cardioInput.duration) return;
+    if (!cardioInput.duration && !cardioInput.distance) return;
     const updatedCardio = {
       ...cardioLogs,
       [selectedDay]: {
@@ -244,6 +576,7 @@ export default function WorkoutSection({ profile = {}, setProfile }) {
       }
     };
     updateWorkoutState({ cardioLogs: updatedCardio });
+    setCardioInput({ type: 'Running', duration: '', distance: '', steps: cardioInput.steps });
   };
 
   const handleRemoveCardio = () => {
@@ -252,26 +585,49 @@ export default function WorkoutSection({ profile = {}, setProfile }) {
     updateWorkoutState({ cardioLogs: copy });
   };
 
-  const currentDayPlan = workoutTemplates.find((t) => t.day === selectedDay) || workoutTemplates[0];
-  const baseExercises = exerciseDatabase[currentDayPlan.focus] || exerciseDatabase['Full Body'];
-  const currentCardio = cardioLogs[selectedDay];
-  
-  const loggedDistance = currentCardio?.distance || 0;
-  const progressPercent = Math.min(Math.round((loggedDistance / cardioTarget.miles) * 100), 100);
+  const handleSaveSteps = (e) => {
+    e.preventDefault();
+    const updatedCardio = {
+      ...cardioLogs,
+      [selectedDay]: {
+        ...(cardioLogs[selectedDay] || { type: 'Running', duration: 0, distance: 0 }),
+        steps: parseInt(cardioInput.steps, 10) || 0,
+      }
+    };
+    updateWorkoutState({ cardioLogs: updatedCardio });
+  };
 
-  // --- CALCULATION FOR STREAKS & ACTIVE CALORIES ---
+  const currentDayPlan = workoutTemplates.find((t) => t.day === selectedDay) || workoutTemplates[0];
+  const rawExercises = exerciseDatabase[currentDayPlan.focus] || exerciseDatabase['Full Body'];
+
+  // Filter exercises if At-Home mode is active and user lacks required equipment
+  const baseExercises = useMemo(() => {
+    if (!isHomeMode) return rawExercises;
+    return rawExercises.map((ex) => {
+      const req = ex.requiredEquipment;
+      const hasReq = req === 'none' || availableEquipment[req];
+      if (hasReq) return ex;
+
+      return {
+        ...ex,
+        name: ex.alternatives?.[0]?.name ? `${ex.alternatives[0].name} (Home Sub)` : ex.name,
+        sets: ex.alternatives?.[0]?.sets || ex.sets,
+        reps: ex.alternatives?.[0]?.reps || ex.reps,
+      };
+    });
+  }, [rawExercises, isHomeMode, availableEquipment]);
+
+  const currentCardio = cardioLogs[selectedDay];
+  const loggedSteps = currentCardio?.steps || 0;
+  const stepProgressPercent = Math.min(Math.round((loggedSteps / cardioTarget.steps) * 100), 100);
+
   const completedWorkoutCount = Object.values(completedExercises).filter(Boolean).length;
   const totalCardioLogged = Object.keys(cardioLogs).length;
   const currentStreak = Math.min(completedWorkoutCount + totalCardioLogged, 7);
 
-  const totalActiveCalories = useMemo(() => {
-    let calories = completedWorkoutCount * 35;
-    Object.values(cardioLogs).forEach((log) => {
-      const rate = log.type === 'Running' ? 11 : log.type === 'Cycling' ? 9 : 7;
-      calories += (log.duration || 30) * rate;
-    });
-    return calories;
-  }, [completedWorkoutCount, cardioLogs]);
+  const totalStepsWeekly = useMemo(() => {
+    return Object.values(cardioLogs).reduce((acc, curr) => acc + (curr.steps || 0), 0);
+  }, [cardioLogs]);
 
   const totalMilesWeekly = useMemo(() => {
     return Object.values(cardioLogs).reduce((acc, curr) => acc + (curr.distance || 0), 0).toFixed(1);
@@ -279,18 +635,62 @@ export default function WorkoutSection({ profile = {}, setProfile }) {
 
   return (
     <section className="space-y-6">
-      {/* Header with Streak Counter & Summary Button */}
-      <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      {/* Header with Streak Counter, Timers & Summary Button */}
+      <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 flex flex-col xl:flex-row xl:items-center justify-between gap-4">
         <div>
           <h2 className="text-xl font-bold text-white flex items-center gap-2">
             <Dumbbell className="text-emerald-400 w-5 h-5" /> Workout & Cardio Hub
           </h2>
           <p className="text-xs text-slate-400 mt-1">
-            Track daily routines, hit target goal mileage, and maintain your active streak.
+            Tailor your routines to your goals and equipment availability.
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Workout Stopwatch Widget */}
+          <div className="bg-slate-900 border border-slate-700/80 px-3.5 py-2 rounded-xl flex items-center gap-3">
+            <Clock className={`w-5 h-5 ${workoutTimerRunning ? 'text-emerald-400 animate-spin' : 'text-slate-400'}`} />
+            <div>
+              <span className="text-[10px] text-slate-400 font-semibold block uppercase">Session Time</span>
+              <span className="text-xs font-extrabold text-white">{formatTime(workoutSeconds)}</span>
+            </div>
+            <button
+              onClick={() => setWorkoutTimerRunning(!workoutTimerRunning)}
+              className={`ml-2 px-2.5 py-1 rounded-lg text-[10px] font-bold transition cursor-pointer ${
+                workoutTimerRunning 
+                  ? 'bg-red-500/20 text-red-400 border border-red-500/40 hover:bg-red-500/30' 
+                  : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 hover:bg-emerald-500/30'
+              }`}
+            >
+              {workoutTimerRunning ? 'Pause' : 'Start'}
+            </button>
+          </div>
+
+          {/* Rest Tracker Widget */}
+          <div className="bg-slate-900 border border-slate-700/80 px-3.5 py-2 rounded-xl flex items-center gap-3">
+            <Activity className="w-5 h-5 text-emerald-400" />
+            <div>
+              <span className="text-[10px] text-slate-400 font-semibold block uppercase">Rest Timer</span>
+              <span className="text-xs font-extrabold text-white">
+                {restTimerSeconds > 0 ? formatTime(restTimerSeconds) : 'Ready'}
+              </span>
+            </div>
+            <div className="flex gap-1 ml-1">
+              <button
+                onClick={() => { setRestTimerSeconds(60); setRestTimerRunning(true); }}
+                className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-[10px] text-slate-300 font-semibold cursor-pointer"
+              >
+                60s
+              </button>
+              <button
+                onClick={() => { setRestTimerSeconds(90); setRestTimerRunning(true); }}
+                className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-[10px] text-slate-300 font-semibold cursor-pointer"
+              >
+                90s
+              </button>
+            </div>
+          </div>
+
           <div className="bg-slate-900 border border-slate-700/80 px-3.5 py-2 rounded-xl flex items-center gap-2.5">
             <Flame className="w-5 h-5 text-amber-400 animate-pulse" />
             <div>
@@ -308,20 +708,89 @@ export default function WorkoutSection({ profile = {}, setProfile }) {
         </div>
       </div>
 
-      {/* Active Calorie Burn Banner */}
-      <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 border border-emerald-500/30 p-4 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-emerald-950 border border-emerald-800 flex items-center justify-center text-emerald-400">
-            <Activity className="w-5 h-5" />
+      {/* Fitness Goals & At-Home Mode Configuration Panel */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Fitness Goal Selector */}
+        <div className="bg-slate-800 p-5 rounded-2xl border border-slate-700 space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-white flex items-center gap-2">
+              <Target className="w-4 h-4 text-emerald-400" /> Primary Fitness Goal
+            </span>
+            <span className="text-[10px] text-slate-400">Tailors reps & cardio</span>
           </div>
-          <div>
-            <span className="text-xs font-bold text-white block">Estimated Active Energy Burn</span>
-            <span className="text-[11px] text-slate-400">Combined output synced for nutrition net calorie calculations.</span>
+
+          <div className="grid grid-cols-3 gap-2">
+            {[
+              { id: 'weight_loss', label: 'Weight Loss' },
+              { id: 'muscle_gain', label: 'Muscle Gain' },
+              { id: 'endurance', label: 'Endurance' }
+            ].map((goal) => (
+              <button
+                key={goal.id}
+                onClick={() => updateWorkoutState({ goal: goal.id })}
+                className={`py-2 px-3 rounded-xl text-xs font-bold border transition cursor-pointer text-center ${
+                  selectedGoal === goal.id
+                    ? 'bg-emerald-950 border-emerald-500 text-emerald-400 shadow-sm'
+                    : 'bg-slate-900 border-slate-700/80 text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                {goal.label}
+              </button>
+            ))}
           </div>
         </div>
-        <div className="bg-emerald-950 border border-emerald-800 px-4 py-2 rounded-xl text-right">
-          <span className="text-[10px] text-emerald-400 font-bold uppercase block">Total Burned</span>
-          <span className="text-base font-extrabold text-white">{totalActiveCalories} <span className="text-xs text-emerald-400 font-normal">kcal</span></span>
+
+        {/* At-Home Mode & Equipment Selector */}
+        <div className="bg-slate-800 p-5 rounded-2xl border border-slate-700 space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Home className="w-4 h-4 text-emerald-400" />
+              <span className="text-xs font-bold text-white">At-Home Workout Mode</span>
+            </div>
+            <button
+              onClick={() => updateWorkoutState({ isHomeMode: !isHomeMode })}
+              className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer border ${
+                isHomeMode 
+                  ? 'bg-emerald-500 text-slate-950 border-emerald-400' 
+                  : 'bg-slate-900 text-slate-400 border-slate-700'
+              }`}
+            >
+              {isHomeMode ? 'Enabled' : 'Disabled'}
+            </button>
+          </div>
+
+          {isHomeMode ? (
+            <div className="space-y-2 pt-1">
+              <span className="text-[10px] font-semibold text-slate-400 block uppercase">Select Available Equipment:</span>
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { key: 'dumbbells', label: 'Dumbbells' },
+                  { key: 'resistanceBands', label: 'Resistance Bands' },
+                  { key: 'pullUpBar', label: 'Pull-up Bar' },
+                  { key: 'barbell', label: 'Barbell / Rack' }
+                ].map((item) => {
+                  const active = availableEquipment[item.key];
+                  return (
+                    <button
+                      key={item.key}
+                      onClick={() => toggleEquipmentItem(item.key)}
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition cursor-pointer ${
+                        active 
+                          ? 'bg-slate-900 border-emerald-500/60 text-emerald-400' 
+                          : 'bg-slate-950 border-slate-800 text-slate-500'
+                      }`}
+                    >
+                      {active ? '✓ ' : '+ '}{item.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            <p className="text-[11px] text-slate-400 pt-1">
+              Enable At-Home Mode to automatically substitute gym equipment with bodyweight or home alternatives.
+            </p>
+          )}
         </div>
       </div>
 
@@ -360,6 +829,11 @@ export default function WorkoutSection({ profile = {}, setProfile }) {
                 Day {currentDayPlan.day}
               </span>
               <span className="text-xs text-slate-400 font-medium">{currentDayPlan.focus} Focus</span>
+              {isHomeMode && (
+                <span className="text-xs bg-emerald-950 text-emerald-400 font-bold px-2 py-0.5 rounded border border-emerald-800">
+                  Home Mode Active
+                </span>
+              )}
             </div>
             <h3 className="text-lg font-bold text-white mt-1">{currentDayPlan.title}</h3>
           </div>
@@ -415,13 +889,49 @@ export default function WorkoutSection({ profile = {}, setProfile }) {
           </div>
         ) : (
           <div className="space-y-3">
+            {/* Routine Builder / Add Custom Exercise Box */}
+            <div className="bg-slate-900 border border-slate-700/80 p-4 rounded-xl space-y-3 mb-4">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-white flex items-center gap-2">
+                  <Sparkles className="w-3.5 h-3.5 text-emerald-400" /> Custom Routine Builder
+                </span>
+                <span className="text-[10px] text-slate-400">Add custom exercises for Day {selectedDay}</span>
+              </div>
+              
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="e.g., Cable Woodchoppers, Face Pulls..."
+                  value={newExName}
+                  onChange={(e) => setNewExName(e.target.value)}
+                  className="flex-1 bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!newExName.trim()) return;
+                    const dayCustoms = customExercises[selectedDay] || [];
+                    const updatedCustoms = {
+                      ...customExercises,
+                      [selectedDay]: [...dayCustoms, { id: `custom_${Date.now()}`, name: newExName.trim(), sets: 3, reps: '10-12', rest: '60s' }]
+                    };
+                    updateWorkoutState({ customExercises: updatedCustoms });
+                    setNewExName('');
+                  }}
+                  className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold px-4 py-2 rounded-lg text-xs transition cursor-pointer"
+                >
+                  Add Exercise
+                </button>
+              </div>
+            </div>
+
             <div className="flex justify-between items-center">
               <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider">Target Exercises</h4>
               <span className="text-xs text-slate-400">Click item to log, or use swap icon</span>
             </div>
 
             <div className="space-y-2">
-              {baseExercises.map((baseEx) => {
+              {[...baseExercises, ...(customExercises[selectedDay] || [])].map((baseEx) => {
                 const exKey = `d${currentDayPlan.day}_${baseEx.id}`;
                 const activeEx = swappedExercises[exKey] || baseEx;
                 const isDone = completedExercises[exKey];
@@ -452,7 +962,7 @@ export default function WorkoutSection({ profile = {}, setProfile }) {
                         <span className={`text-xs font-bold block ${isDone ? 'line-through text-slate-400' : 'text-slate-100'}`}>
                           {activeEx.name}
                         </span>
-                        <span className="text-[10px] text-slate-400">
+                        <span className="text-[10px] text-slate-400 block">
                           {activeEx.sets} Sets × {activeEx.reps} reps · {activeEx.rest} rest
                           {swappedExercises[exKey] && <span className="text-emerald-400 ml-1.5 font-semibold">(Swapped)</span>}
                         </span>
@@ -476,111 +986,133 @@ export default function WorkoutSection({ profile = {}, setProfile }) {
           </div>
         )}
 
-        {/* Goal-Based Daily Cardio Tracker Section */}
+        {/* Daily Steps Input & Original Cardio Section */}
         <div className="border-t border-slate-700/80 pt-5 space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-slate-900 border border-slate-700/60 p-4 rounded-xl">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-emerald-950 border border-emerald-800 flex items-center justify-center text-emerald-400 shrink-0">
-                <Target className="w-5 h-5" />
-              </div>
-              <div>
-                <span className="text-xs font-bold text-white block">Goal Weight Cardio Target</span>
-                <span className="text-[10px] text-slate-400">
-                  Recommended: <strong className="text-emerald-400">{cardioTarget.miles} miles</strong> daily to reach your target weight.
-                </span>
-              </div>
-            </div>
-
-            {currentCardio && (
-              <button
-                onClick={handleRemoveCardio}
-                className="text-[11px] text-red-400 hover:underline cursor-pointer self-end sm:self-center"
-              >
-                Reset Cardio Log
-              </button>
-            )}
-          </div>
-
-          <div className="space-y-1.5 px-1">
-            <div className="flex justify-between text-[11px]">
-              <span className="text-slate-400">Today's Progress</span>
-              <span className="font-bold text-emerald-400">{loggedDistance} / {cardioTarget.miles} Miles ({progressPercent}%)</span>
-            </div>
-            <div className="w-full bg-slate-900 rounded-full h-2 overflow-hidden border border-slate-700/60">
-              <div 
-                className="bg-emerald-500 h-full transition-all duration-500 rounded-full"
-                style={{ width: `${progressPercent}%` }}
-              ></div>
-            </div>
-          </div>
-
-          {currentCardio ? (
-            <div className="bg-slate-900 border border-emerald-500/30 p-4 rounded-xl flex items-center justify-between">
+          {/* Daily Total Steps Tracker */}
+          <div className="bg-slate-900 border border-slate-700/80 p-4 rounded-xl space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-emerald-950 border border-emerald-800 flex items-center justify-center text-emerald-400">
-                  <Flame className="w-4 h-4" />
+                <div className="w-8 h-8 rounded-lg bg-emerald-950 border border-emerald-800 flex items-center justify-center text-emerald-400 shrink-0">
+                  <Footprints className="w-4 h-4" />
                 </div>
                 <div>
-                  <span className="text-xs font-bold text-white block">{currentCardio.type} Completed</span>
+                  <span className="text-xs font-bold text-white block">Daily Steps Tracker</span>
                   <span className="text-[10px] text-slate-400">
-                    {currentCardio.duration} mins {currentCardio.distance > 0 ? `· ${currentCardio.distance} miles` : ''}
+                    Goal: <strong className="text-emerald-400">{cardioTarget.steps.toLocaleString()} steps</strong> ({cardioTarget.miles} miles) for your <span className="text-slate-200 capitalize">{selectedGoal.replace('_', ' ')}</span> goal.
                   </span>
                 </div>
               </div>
-              <span className="text-xs bg-emerald-950 text-emerald-400 font-bold px-2.5 py-1 rounded-lg border border-emerald-800">
-                Logged ✓
+              <span className="text-xs font-extrabold text-emerald-400 bg-emerald-950/60 px-3 py-1 rounded-lg border border-emerald-800 self-start sm:self-center">
+                {loggedSteps.toLocaleString()} / {cardioTarget.steps.toLocaleString()} ({stepProgressPercent}%)
               </span>
             </div>
-          ) : (
-            <form onSubmit={handleSaveCardio} className="bg-slate-900 border border-slate-700/80 p-4 rounded-xl space-y-3">
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div>
-                  <label className="text-[10px] font-semibold text-slate-400 block mb-1">Cardio Type</label>
-                  <select
-                    value={cardioInput.type}
-                    onChange={(e) => setCardioInput({ ...cardioInput, type: e.target.value })}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-emerald-500"
-                  >
-                    <option value="Running">Running</option>
-                    <option value="Walking">Walking</option>
-                    <option value="Cycling">Cycling</option>
-                    <option value="Rowing">Rowing</option>
-                    <option value="Elliptical">Elliptical</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="text-[10px] font-semibold text-slate-400 block mb-1">Duration (Mins)</label>
-                  <input
-                    type="number"
-                    placeholder="e.g. 30"
-                    value={cardioInput.duration}
-                    onChange={(e) => setCardioInput({ ...cardioInput, duration: e.target.value })}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-emerald-500"
-                  />
-                </div>
-                <div>
-                  <label className="text-[10px] font-semibold text-slate-400 block mb-1">Distance (Miles)</label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    placeholder="e.g. 2.5"
-                    value={cardioInput.distance}
-                    onChange={(e) => setCardioInput({ ...cardioInput, distance: e.target.value })}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-emerald-500"
-                  />
-                </div>
-              </div>
 
-              <div className="flex justify-end pt-1">
-                <button
-                  type="submit"
-                  className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold px-4 py-2 rounded-lg text-xs transition cursor-pointer"
-                >
-                  Log Cardio Session
-                </button>
-              </div>
+            <div className="w-full bg-slate-950 rounded-full h-2 overflow-hidden border border-slate-800">
+              <div 
+                className="bg-emerald-500 h-full transition-all duration-500 rounded-full"
+                style={{ width: `${stepProgressPercent}%` }}
+              ></div>
+            </div>
+
+            <form onSubmit={handleSaveSteps} className="flex gap-2 pt-1">
+              <input
+                type="number"
+                placeholder="Enter total steps for today (e.g. 8500)..."
+                value={cardioInput.steps}
+                onChange={(e) => setCardioInput({ ...cardioInput, steps: e.target.value })}
+                className="flex-1 bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500"
+              />
+              <button
+                type="submit"
+                className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold px-4 py-2 rounded-lg text-xs transition cursor-pointer"
+              >
+                Save Steps
+              </button>
             </form>
-          )}
+          </div>
+
+          {/* Original Cardio Log Section */}
+          <div className="space-y-3">
+            <div className="flex justify-between items-center">
+              <span className="text-xs font-bold text-slate-300 uppercase tracking-wider">Cardio & Endurance Session</span>
+              {currentCardio && (
+                <button
+                  onClick={handleRemoveCardio}
+                  className="text-[11px] text-red-400 hover:underline cursor-pointer"
+                >
+                  Clear Cardio Log
+                </button>
+              )}
+            </div>
+
+            {currentCardio && currentCardio.duration ? (
+              <div className="bg-slate-900 border border-emerald-500/30 p-4 rounded-xl flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-emerald-950 border border-emerald-800 flex items-center justify-center text-emerald-400">
+                    <Flame className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <span className="text-xs font-bold text-white block">{currentCardio.type} Session Logged</span>
+                    <span className="text-[10px] text-slate-400">
+                      {currentCardio.duration} mins {currentCardio.distance > 0 ? `· ${currentCardio.distance} miles` : ''}
+                    </span>
+                  </div>
+                </div>
+                <span className="text-xs bg-emerald-950 text-emerald-400 font-bold px-2.5 py-1 rounded-lg border border-emerald-800">
+                  Logged ✓
+                </span>
+              </div>
+            ) : (
+              <form onSubmit={handleSaveCardio} className="bg-slate-900 border border-slate-700/80 p-4 rounded-xl space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="text-[10px] font-semibold text-slate-400 block mb-1">Cardio Type</label>
+                    <select
+                      value={cardioInput.type}
+                      onChange={(e) => setCardioInput({ ...cardioInput, type: e.target.value })}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-emerald-500"
+                    >
+                      <option value="Running">Running</option>
+                      <option value="Walking">Walking</option>
+                      <option value="Cycling">Cycling</option>
+                      <option value="Rowing">Rowing</option>
+                      <option value="Elliptical">Elliptical</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-semibold text-slate-400 block mb-1">Duration (Mins)</label>
+                    <input
+                      type="number"
+                      placeholder="e.g. 30"
+                      value={cardioInput.duration}
+                      onChange={(e) => setCardioInput({ ...cardioInput, duration: e.target.value })}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-emerald-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-semibold text-slate-400 block mb-1">Distance (Miles)</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      placeholder="e.g. 2.5"
+                      value={cardioInput.distance}
+                      onChange={(e) => setCardioInput({ ...cardioInput, distance: e.target.value })}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-emerald-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex justify-end pt-1">
+                  <button
+                    type="submit"
+                    className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold px-4 py-2 rounded-lg text-xs transition cursor-pointer"
+                  >
+                    Log Cardio Session
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
         </div>
       </div>
 
@@ -644,8 +1176,8 @@ export default function WorkoutSection({ profile = {}, setProfile }) {
                 <span className="text-xl font-extrabold text-white mt-0.5 block">{completedWorkoutCount} <span className="text-xs font-normal text-slate-400">Sessions</span></span>
               </div>
               <div className="bg-slate-800/80 border border-slate-700 p-3.5 rounded-xl">
-                <span className="text-[10px] text-slate-400 font-semibold uppercase block">Cardio Distance</span>
-                <span className="text-xl font-extrabold text-white mt-0.5 block">{totalMilesWeekly} <span className="text-xs font-normal text-emerald-400">Miles</span></span>
+                <span className="text-[10px] text-slate-400 font-semibold uppercase block">Total Weekly Steps</span>
+                <span className="text-xl font-extrabold text-white mt-0.5 block">{totalStepsWeekly.toLocaleString()} <span className="text-xs font-normal text-emerald-400">Steps</span></span>
               </div>
             </div>
 
@@ -655,8 +1187,8 @@ export default function WorkoutSection({ profile = {}, setProfile }) {
               </span>
               <p className="text-xs text-slate-300 leading-relaxed">
                 {completedWorkoutCount >= 3 
-                  ? "Outstanding consistency this week! Your progressive overload and active calorie expenditure are hitting target thresholds for body recomposition."
-                  : "You're building momentum. Complete remaining workouts and daily cardio targets to maximize net calorie deficit goals."}
+                  ? "Outstanding consistency this week! Your step counts and progressive workouts are hitting target thresholds for your current goal."
+                  : "You're building momentum. Complete remaining workouts and daily step targets to maximize your progress."}
               </p>
             </div>
 
