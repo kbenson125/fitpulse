@@ -21,6 +21,7 @@ export default function App() {
       targetWeight: 165,
       targetDate: '',
       goal: 'weight_loss',
+      activityLevel: 'moderately_active', // <-- Added default activity level
       isAtHome: false,
       daysPerWeek: 4
     };
@@ -92,7 +93,7 @@ export default function App() {
       {/* Settings / Profile Setup Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 max-w-md w-full space-y-5 shadow-2xl">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 max-w-md w-full space-y-5 shadow-2xl max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center border-b border-slate-800 pb-3">
               <h3 className="text-lg font-bold text-white flex items-center gap-2">
                 <Settings className="w-5 h-5 text-emerald-400" /> Edit Profile & Preferences
@@ -160,6 +161,23 @@ export default function App() {
                 </select>
               </div>
 
+              {/* Activity Level Selector */}
+              <div>
+                <label className="text-xs font-semibold text-slate-300 block mb-1">Activity Level</label>
+                <select
+                  name="activityLevel"
+                  value={profile.activityLevel || 'moderately_active'}
+                  onChange={handleProfileChange}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-xs text-white focus:outline-none focus:border-emerald-500"
+                >
+                  <option value="sedentary">Sedentary (little or no exercise)</option>
+                  <option value="lightly_active">Lightly Active (light exercise/sports 1-3 days/week)</option>
+                  <option value="moderately_active">Moderately Active (moderate exercise/sports 3-5 days/week)</option>
+                  <option value="very_active">Very Active (hard exercise/sports 6-7 days a week)</option>
+                  <option value="extra_active">Extra Active (very hard exercise/physical job)</option>
+                </select>
+              </div>
+
               {/* Target Weight */}
               <div>
                 <label className="text-xs font-semibold text-slate-300 block mb-1">Target Weight (lbs)</label>
@@ -200,7 +218,7 @@ export default function App() {
                     <button
                       key={num}
                       type="button"
-                      onClick={() => setProfile(prev => ({ ...prev, daysPerWord: num, daysPerWeek: num }))}
+                      onClick={() => setProfile(prev => ({ ...prev, daysPerWeek: num }))}
                       className={`py-2 rounded-lg text-xs font-bold border transition cursor-pointer ${
                         profile.daysPerWeek === num
                           ? 'bg-emerald-500 text-slate-950 border-emerald-400'
